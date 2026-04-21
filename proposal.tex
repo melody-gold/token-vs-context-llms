@@ -1,0 +1,129 @@
+\documentclass{article}
+\usepackage{array}
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{fancyhdr}
+
+\usetikzlibrary{trees}
+\usetikzlibrary{positioning}
+
+\renewcommand{\thesection}{\Roman{section}}
+
+\graphicspath{{figures/}}
+
+
+\pagestyle{fancy}
+\fancyhf{} 
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1em}
+
+\lhead{MATH 598}
+\rhead{Project Proposal}
+
+\title{Project Proposal\\[2ex] Token vs Context in LLM Representations\\[2ex] \large MATH 598: LLMs}
+\author{Melody Goldanloo}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Motivation}
+
+Transformer models like GPT-style Transformers build representations that combine information from the current token and prior context via attention. However, it remains unclear how much of a layer's representation is derived from the current token itself versus information aggregated from previous tokens.
+
+Understanding this distinction is important for interpretability. If certain representations can be recovered from the current token alone, then they may not rely on contextual reasoning. On the other hand, representations that cannot be recovered without context likely correspond to higher-level or relational information.
+
+This project aims to quantify this distinction and analyze which types of information in large language models depend on context.
+
+\section{Proposed Approach}
+
+The core idea is to estimate how much of an intermediate representation can be predicted using only the current token.
+
+Using a pretrained model such as Gemma and a dataset such as The Pile (e.g., a subset like Pile-10k), I will collect, for each token:
+\begin{itemize}
+    \item the token embedding
+    \item intermediate layer activations
+    \item sparse autoencoder (SAE) feature activations
+\end{itemize}
+
+I will then train a linear model that maps the token embedding directly to the intermediate representation at a given layer. This effectively ``skips'' the attention mechanism and attempts to reconstruct the representation without any contextual information.
+
+The model will be evaluated using cosine similarity, mean squared error (MSE), and $R^2$. High performance indicates that the representation is largely token-local, while low performance suggests dependence on context.
+
+\subsection*{Feature-Level Analysis}
+
+In addition to predicting raw activations, I will predict SAE feature activations. This allows for a more interpretable analysis of which features depend on context.
+
+Specifically, I will examine:
+\begin{itemize}
+    \item which features are well-predicted from the token alone
+    \item which features are poorly predicted and likely require context
+\end{itemize}
+
+\section{Hypothesis and Expected Outcomes}
+
+I hypothesize that:
+\begin{itemize}
+    \item Early layers will be more predictable from the current token
+    \item Later layers will rely more heavily on context
+    \item Lower-level features (e.g., lexical or local syntactic information) will be more predictable
+    \item Higher-level semantic features will be less predictable and require context
+\end{itemize}
+
+If the results show that later layers are still highly predictable from the token, this would challenge the assumption that deeper layers primarily encode contextual information.
+
+Conversely, if even early layers are not predictable, this would suggest that contextual mixing happens earlier than expected.
+
+\section{Evaluation and Experimental Design}
+
+The experiment will proceed as follows:
+\begin{enumerate}
+    \item Run a dataset through the model and collect token embeddings, layer activations, and SAE activations
+    \item Train linear models to predict activations from token embeddings
+    \item Evaluate prediction accuracy across layers
+    \item Analyze distribution of prediction accuracy across SAE features
+\end{enumerate}
+
+Results will be visualized across layers to identify trends in context dependence.
+
+\section{Related Work}
+
+The tuned lens approach \cite{belrose2023tunedlens} studies how intermediate representations can be used to predict model outputs. This project is related but reverses the direction by predicting representations from the input token.
+
+Work on sparse autoencoders \cite{bricken2023monosemanticity} shows that model activations can be decomposed into interpretable features. This project builds on that idea by analyzing which of those features depend on context.
+
+Research on induction heads and in-context learning \cite{olsson2022induction} demonstrates that certain model behaviors rely heavily on context, motivating the need to better understand where and how context is used.
+
+\section{Challenges and Potential Failure Points}
+
+The main challenges in this project include:
+\begin{itemize}
+    \item Determining whether linear models are expressive enough to capture token-local information
+    \item Interpreting SAE features in a meaningful way
+    \item Ensuring that poor prediction performance truly reflects context dependence rather than model limitations
+\end{itemize}
+
+A key risk is that the linear model may underperform even when information is token-local, leading to misleading conclusions.
+
+Another challenge is computational cost, as collecting activations and training models across multiple layers may be expensive.
+
+\section{Expected Contributions}
+
+This project aims to provide:
+\begin{itemize}
+    \item A quantitative measure of how context dependence changes across layers
+    \item A feature-level analysis of which types of information require context
+    \item Insight into how representations are structured in transformer models
+\end{itemize}
+
+\section{Conclusion}
+
+This project proposes a method for analyzing how much of a language model's internal representations depend on the current token versus prior context. By combining linear probing with sparse autoencoder features, it aims to provide a more interpretable understanding of where and how context is used within the model.
+
+\end{document}
