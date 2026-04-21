@@ -1,20 +1,26 @@
-\documentclass{article}
+\documentclass[12pt]{article}
 \usepackage{array}
 \usepackage{amsmath, amsthm, amssymb}
+\usepackage[backend=biber]{biblatex}
 \usepackage{enumitem}
-\usepackage{hyperref}
-\usepackage{float}
-\usepackage{graphicx}
-\usepackage{tikz}
 \usepackage{fancyhdr}
+\usepackage{float}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
 
 \usetikzlibrary{trees}
 \usetikzlibrary{positioning}
 
-\renewcommand{\thesection}{\Roman{section}}
+\addbibresource{sources.bib}
 
 \graphicspath{{figures/}}
 
+\renewcommand{\thesection}{\Roman{section}}
+
+\geometry{letterpaper, margin=1in}
 
 \pagestyle{fancy}
 \fancyhf{} 
@@ -24,22 +30,24 @@
 
 \lhead{MATH 598}
 \rhead{Project Proposal}
+\cfoot{\thepage}
 
-\title{Project Proposal\\[2ex] Token vs Context in LLM Representations\\[2ex] \large MATH 598: LLMs}
-\author{Melody Goldanloo}
+\title{Project Proposal\\[1ex] Token vs Context in LLM Representations}
+\author{Melody Goldanloo\\[2ex] MATH 598: LLMs}
 \date{}
 
 \begin{document}
 
 \maketitle
+\thispagestyle{fancy}
 
-\section{Motivation}
+\section{Introduction}
 
-Transformer models like GPT-style Transformers build representations that combine information from the current token and prior context via attention. However, it remains unclear how much of a layer's representation is derived from the current token itself versus information aggregated from previous tokens.
+Transformer models build representations that use information from the current token and prior context via attention. However, it's unclear how much of a given layer's representation is derived from the current token itself versus information aggregated from earlier tokens (i.e., the context).
 
-Understanding this distinction is important for interpretability. If certain representations can be recovered from the current token alone, then they may not rely on contextual reasoning. On the other hand, representations that cannot be recovered without context likely correspond to higher-level or relational information.
+Understanding this distinction is important for interpretability. If a representations can be recovered from the current token alone, it likely does not rely on contextual reasoning. On the other hand, representations that cannot be recovered without context likely reflect information that requires context, such as higher-level or relational information.
 
-This project aims to quantify this distinction and analyze which types of information in large language models depend on context.
+This project aims to quantify this difference and identify which parts of an LLM's internal representation depend on context. Simply put, the question I'm seeking to answer is: how much of an LLM’s layer activations comes from the current token, and how much comes from context?
 
 \section{Proposed Approach}
 
@@ -100,18 +108,19 @@ Work on sparse autoencoders \cite{bricken2023monosemanticity} shows that model a
 
 Research on induction heads and in-context learning \cite{olsson2022induction} demonstrates that certain model behaviors rely heavily on context, motivating the need to better understand where and how context is used.
 
+Probing methods have also been widely used to analyze representations in neural networks. For example, \cite{hewitt2019structural} shows that linear probes can recover structured linguistic information from model activations. This supports the use of probing as a tool for understanding what information is encoded in a model.
+
+However, probing has known limitations. Prior work \cite{alain2016understanding} highlights that probe performance does not necessarily reflect what information is directly used by the model, and may instead reflect what is linearly recoverable. This motivates careful interpretation of results in this project.
+
+Finally, prior work on transformer structure \cite{elhage2021framework} suggests that many computations in transformers can be understood in terms of relatively simple components, which supports the idea that certain aspects of representations may be predictable from limited information such as the current token.
+
 \section{Challenges and Potential Failure Points}
 
-The main challenges in this project include:
-\begin{itemize}
-    \item Determining whether linear models are expressive enough to capture token-local information
-    \item Interpreting SAE features in a meaningful way
-    \item Ensuring that poor prediction performance truly reflects context dependence rather than model limitations
-\end{itemize}
+A key challenge in this project is interpreting probe performance. Poor prediction performance may indicate true context dependence, but it may also result from the limited expressiveness of the probe model. This makes it important to avoid over-justifying and misinterpreting negative results.
 
-A key risk is that the linear model may underperform even when information is token-local, leading to misleading conclusions.
+A practical consideration is computational cost. Collecting activations and working with SAE features can be expensive on a local machine. To keep the project manageable, I will initially focus on a smaller model, dataset subset, and a limited number of layers or features. This allows for a controlled and interpretable analysis while remaining computationally feasible. However, I can utilize additional compute resources if needed, which would allow me to scale up parts of the analysis.
 
-Another challenge is computational cost, as collecting activations and training models across multiple layers may be expensive.
+Finally, analyzing SAE features in a meaningful way may be difficult, as interpreting what individual features represent is itself an open problem.
 
 \section{Expected Contributions}
 
@@ -125,5 +134,7 @@ This project aims to provide:
 \section{Conclusion}
 
 This project proposes a method for analyzing how much of a language model's internal representations depend on the current token versus prior context. By combining linear probing with sparse autoencoder features, it aims to provide a more interpretable understanding of where and how context is used within the model.
+
+\printbibliography
 
 \end{document}
