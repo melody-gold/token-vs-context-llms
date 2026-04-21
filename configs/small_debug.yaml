@@ -1,0 +1,23 @@
+model:
+  name: distilgpt2
+  device: cpu
+  max_length: 96
+  layers: [0, 1, 2, 3, 4, 5]
+
+dataset:
+  name: wikitext
+  subset: wikitext-2-raw-v1
+  split: train[:32]
+  text_column: text
+  max_texts: 32
+
+extraction:
+  batch_size: 4
+  max_tokens: 2048
+  output_path: artifacts/extractions/small_debug.npz
+
+probe:
+  ridge_alpha: 1.0
+  test_fraction: 0.2
+  random_seed: 0
+  output_path: results/generated/small_debug_metrics.json

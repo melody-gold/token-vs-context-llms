@@ -1,0 +1,42 @@
+[project]
+name = "token-vs-context-llms"
+version = "0.1.0"
+description = "Starter code for probing token-local versus context-dependent LLM representations."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.1",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+llm = [
+  "datasets>=3.2",
+  "torch>=2.5",
+  "tqdm>=4.67",
+  "transformers>=4.48",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "ruff>=0.12",
+]
+
+[project.scripts]
+token-vs-context = "token_vs_context_llms.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]

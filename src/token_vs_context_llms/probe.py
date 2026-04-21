@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from typing import Any
+
+import numpy as np
+
+from token_vs_context_llms.metrics import mean_cosine_similarity, mean_squared_error, r2_score
+
+
+@dataclass(slots=True)
+class RidgeProbe:
+    weights: np.ndarray
+    bias: np.ndarray
+    alpha: float
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        return x @ self.weights + self.bias
+
+
+@dataclass(slots=True)
+class LayerMetric:
+    layer_index: int
+    mean_squared_error: float
+    r2_score: float
+    mean_cosine_similarity: float
+    num_train_tokens: int
+    num_test_tokens: int
+
+
+def fit_ridge_probe(x: np.ndarray, y: np.ndarray, alpha: float = 1.0) -> RidgeProbe:
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+
+    if x.ndim != 2 or y.ndim != 2:
+        raise ValueError("fit_ridge_probe expects 2D arrays for both x and y.")
+
+    if x.shape[0] != y.shape[0]:
+        raise ValueError("x and y must have the same number of rows.")
+
+    x_mean = np.mean(x, axis=0, keepdims=True)
+    y_mean = np.mean(y, axis=0, keepdims=True)
+    x_centered = x - x_mean
+    y_centered = y - y_mean
+
+    gram = x_centered.T @ x_centered
+    regularizer = alpha * np.eye(gram.shape[0], dtype=np.float64)
+    weights = np.linalg.solve(gram + regularizer, x_centered.T @ y_centered)
+    bias = np.ravel(y_mean - x_mean @ weights)
+    return RidgeProbe(weights=weights, bias=bias, alpha=alpha)
+
+
+def train_test_split(
+    x: np.ndarray,
+    y: np.ndarray,
+    test_fraction: float = 0.2,
+    random_seed: int = 0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if not 0.0 < test_fraction < 1.0:
+        raise ValueError("test_fraction must be between 0 and 1.")
+
+    num_examples = x.shape[0]
+    if num_examples < 2:
+        raise ValueError("Need at least 2 examples to create a train/test split.")
+
+    rng = np.random.default_rng(random_seed)
+    indices = rng.permutation(num_examples)
+    num_test = max(1, int(round(num_examples * test_fraction)))
+    test_indices = indices[:num_test]
+    train_indices = indices[num_test:]
+
+    if train_indices.size == 0:
+        raise ValueError("Train split is empty; decrease test_fraction or add more data.")
+
+    return x[train_indices], x[test_indices], y[train_indices], y[test_indices]
+
+
+def evaluate_probe(
+    x: np.ndarray,
+    y: np.ndarray,
+    alpha: float = 1.0,
+    test_fraction: float = 0.2,
+    random_seed: int = 0,
+) -> tuple[RidgeProbe, LayerMetric]:
+    x_train, x_test, y_train, y_test = train_test_split(
+        x, y, test_fraction=test_fraction, random_seed=random_seed
+    )
+    model = fit_ridge_probe(x_train, y_train, alpha=alpha)
+    predictions = model.predict(x_test)
+    metric = LayerMetric(
+        layer_index=-1,
+        mean_squared_error=mean_squared_error(y_test, predictions),
+        r2_score=r2_score(y_test, predictions),
+        mean_cosine_similarity=mean_cosine_similarity(y_test, predictions),
+        num_train_tokens=int(x_train.shape[0]),
+        num_test_tokens=int(x_test.shape[0]),
+    )
+    return model, metric
+
+
+def evaluate_hidden_state_layers(
+    token_embeddings: np.ndarray,
+    hidden_states: np.ndarray,
+    layer_indices: np.ndarray,
+    alpha: float = 1.0,
+    test_fraction: float = 0.2,
+    random_seed: int = 0,
+) -> list[LayerMetric]:
+    if hidden_states.ndim != 3:
+        raise ValueError("hidden_states must have shape [num_tokens, num_layers, hidden_size].")
+
+    if hidden_states.shape[1] != len(layer_indices):
+        raise ValueError("layer_indices must match the second hidden_states dimension.")
+
+    metrics: list[LayerMetric] = []
+    for local_layer, layer_index in enumerate(layer_indices):
+        _, metric = evaluate_probe(
+            token_embeddings,
+            hidden_states[:, local_layer, :],
+            alpha=alpha,
+            test_fraction=test_fraction,
+            random_seed=random_seed,
+        )
+        metric.layer_index = int(layer_index)
+        metrics.append(metric)
+
+    return metrics
+
+
+def serialize_metrics(metrics: list[LayerMetric]) -> list[dict[str, Any]]:
+    return [asdict(metric) for metric in metrics]
