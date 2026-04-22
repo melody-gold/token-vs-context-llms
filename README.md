@@ -13,7 +13,28 @@ The updated proposal breaks the work into two stages:
 
 ## Repository Layout & Code Map
 
-
+```
+token-vs-context-llms/
+├── writeup/
+│   ├── progress_report.md: update and experiment log scaffold
+│   ├── proposal/
+│   │   ├── proposal.tex: proposal source
+│   │   ├── proposal.pdf: compiled proposal
+│   │   └── sources.bib: bibliography for the proposal
+│
+├── src/token_vs_context_llms/: extraction, probing, metrics, and CLI code
+│   ├── cli.py: command-line entrypoint exposed as `token-vs-context`
+│   ├── config.py: experiment dataclasses and YAML loader
+│   ├── extract.py: Hugging Face extraction pipeline for token embeddings and hidden states
+│   ├── metrics.py: cosine similarity, MSE, and R^2
+│   └── probe.py: ridge probe fitting and layerwise evaluation
+│
+├── tests/: lightweight unit tests for metrics and probe fitting
+├── configs/: runnable configs for smoke tests plus templates for larger experiments
+├── data/: dataset notes, manifests, and local subsets
+├── artifacts/: saved token-level activations and future SAE-derived artifacts
+└── results/: layerwise metrics, plots, and experiment summaries
+```
 
 
 ## Current Scope
