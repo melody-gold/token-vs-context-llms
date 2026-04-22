@@ -1,5 +1,6 @@
-# Replace the placeholder values below with the actual model, dataset,
-# and output locations for your main experiment.
+# Copy this file for the main proposal run.
+# First stabilize the hidden-state baseline, then add SAE-specific config
+# once you choose a compatible SAE release for the same model family.
 model:
   name: google/gemma-2-2b
   device: cuda
@@ -7,6 +8,8 @@ model:
   layers: null
 
 dataset:
+  # Replace these with the exact dataset identifier you plan to use.
+  # Keep a small slice while iterating locally, then scale the split up.
   name: your-huggingface-dataset
   subset: null
   split: train[:1000]
@@ -14,6 +17,7 @@ dataset:
   max_texts: 1000
 
 extraction:
+  # Token budget is usually the main cost control knob.
   batch_size: 8
   max_tokens: 50000
   output_path: artifacts/extractions/main_experiment.npz

@@ -1,5 +1,7 @@
 # Token vs Context in LLM Representations
 
+## Author: Melody Goldanloo
+
 ## Abstract
 
 This project studies how much of a transformer's intermediate representation is recoverable from the current token alone, without access to prior context. The working method is to extract token embeddings and layer activations from a pretrained causal language model, then train token-only linear probes that predict each layer's hidden state from the input embedding. Probe quality across layers provides a quantitative picture of where token-local information remains dominant and where context-dependent structure becomes necessary. The long-term goal is to extend this analysis to sparse autoencoder features so that context dependence can be interpreted at the feature level rather than only at the activation-vector level.
@@ -83,12 +85,7 @@ Known risks and open issues:
 - SAE selection may determine what kind of feature-level interpretation is possible
 - model and dataset choices may be constrained by hardware or gated access
 
-## Contributions
-
-Update this section as the group finalizes responsibilities.
-
-- Melody Goldanloo: proposal, starter repo scaffold, initial experiment design
-- Add teammate names and concrete responsibilities here
+## Questions
 
 ## Appendix Planning
 
