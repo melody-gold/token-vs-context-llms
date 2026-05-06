@@ -27,14 +27,18 @@ token-vs-context-llms/
 │   ├── config.py: experiment dataclasses and YAML loader
 │   ├── extract.py: Hugging Face extraction pipeline for token embeddings and hidden states
 │   ├── metrics.py: cosine similarity, MSE, and R^2
-│   └── probe.py: ridge probe fitting and layerwise evaluation
+│   └── probe.py: affine probe fitting and layerwise evaluation
 │
 ├── tests/: lightweight unit tests for metrics and probe fitting
 ├── configs/: runnable configs for smoke tests plus templates for larger experiments
 ├── data/: dataset notes, manifests, and local subsets
-├── artifacts/: saved token-level activations and future SAE-derived artifacts
-└── results/: layerwise metrics, plots, and experiment summaries
+├── artifacts/: local token-level activations and future SAE-derived artifacts
+└── results/: generated layerwise metrics, plots, and experiment summaries
 ```
+
+The `data/`, `artifacts/`, and `results/` directories are currently scaffold directories.
+They intentionally contain only README files until experiments are run locally.
+Large activation artifacts should not be committed because they are regenerable.
 
 
 ## Current Scope
@@ -42,15 +46,16 @@ token-vs-context-llms/
 Implemented now:
 
 - token embedding and hidden-state extraction from a Hugging Face causal LM
-- compressed artifact storage with sidecar metadata
-- ridge-style linear probes trained separately for each selected layer
+- uncompressed artifact storage with sidecar metadata
+- unregularized affine probes trained separately for each selected layer
 - evaluation with cosine similarity, mean squared error, and `R^2`
 - a small local debug config for validating the pipeline end to end
+- no proposal-scale results are committed yet
 
 Planned next:
 
 - choose the main model and dataset for the proposal-scale run
-- collect layerwise results at a larger token budget
+- collect and commit layerwise metric summaries at a larger token budget
 - add plotting and experiment summaries
 - add an SAE activation path once a model-compatible SAE release is selected
 
@@ -78,6 +83,9 @@ uv run token-vs-context probe --config configs/small_debug.yaml
 ```
 
 The extraction step writes a token-level artifact under `artifacts/`. The probe step reads that artifact, fits one linear probe per layer, and writes metrics to `results/`.
+
+By default, `probe` fits the simple affine baseline with no ridge penalty. Use `--alpha`
+or `probe.ridge_alpha` only for later regularized ablations.
 
 If `uv run` is unstable on your machine, the environment created by `uv sync` still works:
 

@@ -9,13 +9,16 @@ from token_vs_context_llms.metrics import mean_cosine_similarity, mean_squared_e
 
 
 @dataclass(slots=True)
-class RidgeProbe:
+class LinearProbe:
     weights: np.ndarray
     bias: np.ndarray
     alpha: float
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         return x @ self.weights + self.bias
+
+
+RidgeProbe = LinearProbe
 
 
 @dataclass(slots=True)
@@ -28,15 +31,25 @@ class LayerMetric:
     num_test_tokens: int
 
 
-def fit_ridge_probe(x: np.ndarray, y: np.ndarray, alpha: float = 1.0) -> RidgeProbe:
+def fit_affine_probe(x: np.ndarray, y: np.ndarray, alpha: float = 0.0) -> LinearProbe:
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
 
     if x.ndim != 2 or y.ndim != 2:
-        raise ValueError("fit_ridge_probe expects 2D arrays for both x and y.")
+        raise ValueError("fit_affine_probe expects 2D arrays for both x and y.")
 
     if x.shape[0] != y.shape[0]:
         raise ValueError("x and y must have the same number of rows.")
+
+    if alpha < 0:
+        raise ValueError("alpha must be non-negative.")
+
+    if alpha == 0:
+        design = np.column_stack([x, np.ones(x.shape[0], dtype=np.float64)])
+        solution, *_ = np.linalg.lstsq(design, y, rcond=None)
+        weights = solution[:-1]
+        bias = solution[-1]
+        return LinearProbe(weights=weights, bias=bias, alpha=alpha)
 
     x_mean = np.mean(x, axis=0, keepdims=True)
     y_mean = np.mean(y, axis=0, keepdims=True)
@@ -47,7 +60,11 @@ def fit_ridge_probe(x: np.ndarray, y: np.ndarray, alpha: float = 1.0) -> RidgePr
     regularizer = alpha * np.eye(gram.shape[0], dtype=np.float64)
     weights = np.linalg.solve(gram + regularizer, x_centered.T @ y_centered)
     bias = np.ravel(y_mean - x_mean @ weights)
-    return RidgeProbe(weights=weights, bias=bias, alpha=alpha)
+    return LinearProbe(weights=weights, bias=bias, alpha=alpha)
+
+
+def fit_ridge_probe(x: np.ndarray, y: np.ndarray, alpha: float = 0.0) -> LinearProbe:
+    return fit_affine_probe(x, y, alpha=alpha)
 
 
 def train_test_split(
@@ -78,14 +95,14 @@ def train_test_split(
 def evaluate_probe(
     x: np.ndarray,
     y: np.ndarray,
-    alpha: float = 1.0,
+    alpha: float = 0.0,
     test_fraction: float = 0.2,
     random_seed: int = 0,
-) -> tuple[RidgeProbe, LayerMetric]:
+) -> tuple[LinearProbe, LayerMetric]:
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_fraction=test_fraction, random_seed=random_seed
     )
-    model = fit_ridge_probe(x_train, y_train, alpha=alpha)
+    model = fit_affine_probe(x_train, y_train, alpha=alpha)
     predictions = model.predict(x_test)
     metric = LayerMetric(
         layer_index=-1,
@@ -102,7 +119,7 @@ def evaluate_hidden_state_layers(
     token_embeddings: np.ndarray,
     hidden_states: np.ndarray,
     layer_indices: np.ndarray,
-    alpha: float = 1.0,
+    alpha: float = 0.0,
     test_fraction: float = 0.2,
     random_seed: int = 0,
 ) -> list[LayerMetric]:
