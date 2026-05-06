@@ -9,6 +9,12 @@ from token_vs_context_llms.probe import evaluate_hidden_state_layers, serialize_
 
 
 def main() -> None:
+    """Parse command-line arguments and dispatch to extraction or probing
+
+    Returns:
+        None. This function runs the requested command and prints the output path
+    """
+
     parser = argparse.ArgumentParser(description="Token-vs-context experiment runner.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -56,6 +62,15 @@ def main() -> None:
 
 
 def run_extract(config_path: str) -> None:
+    """Run activation extraction from a YAML config and save the artifact
+
+    Args:
+        config_path: Path to the experiment YAML file
+
+    Returns:
+        None. The extraction artifact is written to the configured output path
+    """
+
     config = load_experiment_config(config_path)
     artifact = collect_hidden_state_artifact(config)
     save_artifact(config.extraction.output_path, artifact)
@@ -70,7 +85,22 @@ def run_probe(
     test_fraction: float | None,
     random_seed: int | None,
 ) -> None:
+    """Run layerwise probe evaluation and save metrics JSON
+
+    Args:
+        config_path: Optional path to the experiment YAML file
+        artifact_path: Optional override for the activation artifact path
+        output_path: Optional override for the metrics JSON path
+        alpha: Optional override for the ridge penalty
+        test_fraction: Optional override for the held-out test fraction
+        random_seed: Optional override for the train/test split seed
+
+    Returns:
+        None. The serialized metrics are written to the configured output path
+    """
+
     config = load_experiment_config(config_path) if config_path else ExperimentConfig()
+    # CLI flags win over values loaded from the YAML config
     probe_config = ProbeConfig(
         ridge_alpha=alpha if alpha is not None else config.probe.ridge_alpha,
         test_fraction=test_fraction if test_fraction is not None else config.probe.test_fraction,
@@ -78,6 +108,7 @@ def run_probe(
         output_path=output_path or config.probe.output_path,
     )
 
+    # artifact path can come from either the config or a direct CLI override
     artifact = load_artifact(artifact_path or config.extraction.output_path)
     metrics = evaluate_hidden_state_layers(
         artifact.token_embeddings,

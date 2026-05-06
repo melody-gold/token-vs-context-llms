@@ -10,6 +10,23 @@ from token_vs_context_llms.io import ActivationArtifact
 
 
 def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifact:
+    """Extract token embeddings and selected hidden states into one artifact
+
+    Args:
+        config: Full experiment configuration describing the model, dataset,
+            extraction batch size, token budget, and selected layers
+
+    Returns:
+        An `ActivationArtifact` whose arrays are token-level. Padded positions
+        are removed, each row corresponds to one observed token, and extraction
+        stops at `config.extraction.max_tokens`
+
+    Raises:
+        ImportError: If the optional Hugging Face extraction dependencies are
+            not installed
+        ValueError: If no usable text or no token activations are produced
+    """
+
     try:
         import torch
         from datasets import load_dataset
@@ -29,6 +46,7 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
         raise ValueError("No non-empty texts were found in the configured dataset split.")
 
     tokenizer = AutoTokenizer.from_pretrained(config.model.name)
+    # some causal LMs do not define a pad token, so reuse EOS for batch padding
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -38,6 +56,7 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
     model.eval()
 
     selected_layers: list[int] | None = config.model.layers
+    # store rows in lists first because we may stop partway through the last batch.
     token_embeddings_rows: list[np.ndarray] = []
     hidden_state_rows: list[np.ndarray] = []
     token_id_rows: list[np.ndarray] = []
@@ -59,8 +78,10 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
             outputs = model(**encoded, output_hidden_states=True)
             hidden_states = outputs.hidden_states[1:]
             if selected_layers is None:
+                # Hugging Face returns one hidden-state tensor per layer after the embedding state
                 selected_layers = list(range(len(hidden_states)))
 
+            # Shape after masking will be [num_real_tokens, num_layers, hidden_size]
             stacked_layers = torch.stack([hidden_states[index] for index in selected_layers], dim=2)
             embeddings = model.get_input_embeddings()(encoded["input_ids"])
 
@@ -69,6 +90,7 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
             encoded["input_ids"]
         )
 
+        # the attention mask drops padding so the saved artifact has one row per real token
         batch_embeddings = embeddings[attention_mask].cpu().numpy()
         batch_hidden_states = stacked_layers[attention_mask].cpu().numpy()
         batch_input_ids = encoded["input_ids"][attention_mask].cpu().numpy()
@@ -79,6 +101,7 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
             break
 
         batch_count = min(remaining_tokens, batch_embeddings.shape[0])
+        # keep only as many tokens as needed to hit the configured token budget
         token_embeddings_rows.append(batch_embeddings[:batch_count])
         hidden_state_rows.append(batch_hidden_states[:batch_count])
         token_id_rows.append(batch_input_ids[:batch_count])
@@ -111,7 +134,19 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
 
 
 def _select_texts(dataset: Iterable[dict], text_column: str, max_texts: int) -> list[str]:
+    """Collect non-empty text fields from a dataset iterator.
+
+    Args:
+        dataset: Iterable of dataset rows, usually from Hugging Face datasets
+        text_column: Name of the column containing text
+        max_texts: Maximum number of text examples to return
+
+    Returns:
+        A list of stripped, non-empty text strings
+    """
+
     texts: list[str] = []
+    # look a little past max_texts in case the split has empty rows
     for row in islice(dataset, max_texts * 4):
         value = str(row.get(text_column, "")).strip()
         if value:
@@ -122,5 +157,15 @@ def _select_texts(dataset: Iterable[dict], text_column: str, max_texts: int) -> 
 
 
 def _batched(items: list[str], batch_size: int) -> Iterable[list[str]]:
+    """Yield consecutive batches from a list of text strings
+
+    Args:
+        items: Text strings to batch
+        batch_size: Maximum number of strings per batch
+
+    Yields:
+        Consecutive slices of `items`
+    """
+
     for start in range(0, len(items), batch_size):
         yield items[start : start + batch_size]
