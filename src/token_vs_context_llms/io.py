@@ -22,7 +22,7 @@ class ActivationArtifact:
 def save_artifact(path: str | Path, artifact: ActivationArtifact) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(
+    np.savez(
         target,
         token_embeddings=artifact.token_embeddings,
         hidden_states=artifact.hidden_states,
