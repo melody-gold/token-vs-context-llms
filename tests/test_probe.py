@@ -10,7 +10,7 @@ def test_evaluate_probe_recovers_linear_mapping() -> None:
     bias = np.array([0.1, -0.2, 0.3])
     y = x @ weights + bias
 
-    _, metrics = evaluate_probe(x, y, alpha=1e-8, test_fraction=0.25, random_seed=3)
+    _, metrics = evaluate_probe(x, y, test_fraction=0.25, random_seed=3)
     assert metrics.mean_squared_error < 1e-12
     assert metrics.r2_score > 0.999999
     assert metrics.mean_cosine_similarity > 0.999999
@@ -27,7 +27,6 @@ def test_evaluate_hidden_state_layers_returns_one_result_per_layer() -> None:
         x,
         hidden_states,
         np.array([2, 5]),
-        alpha=1e-8,
         test_fraction=0.25,
         random_seed=7,
     )

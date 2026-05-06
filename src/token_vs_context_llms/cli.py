@@ -28,7 +28,11 @@ def main() -> None:
         help="Override path to the activation artifact .npz file.",
     )
     probe_parser.add_argument("--output", help="Override path to the metrics JSON output.")
-    probe_parser.add_argument("--alpha", type=float, help="Override ridge alpha.")
+    probe_parser.add_argument(
+        "--alpha",
+        type=float,
+        help="Override ridge alpha. Use 0 for the unregularized affine baseline.",
+    )
     probe_parser.add_argument("--test-fraction", type=float, help="Override test split fraction.")
     probe_parser.add_argument("--random-seed", type=int, help="Override random seed.")
 

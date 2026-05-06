@@ -23,7 +23,8 @@ extraction:
   output_path: artifacts/extractions/main_experiment.npz
 
 probe:
-  ridge_alpha: 1.0
+  # 0.0 is affine. Set >0 later for ridge ablations.
+  ridge_alpha: 0.0
   test_fraction: 0.2
   random_seed: 0
   output_path: results/generated/main_experiment_metrics.json

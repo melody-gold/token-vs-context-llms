@@ -50,7 +50,7 @@ Current status:
 
 - the repository contains a working extraction pipeline for token embeddings and hidden states
 - extracted artifacts store token embeddings, hidden states, token ids, positions, tokens, layer indices, and run metadata
-- a ridge-probe evaluation path is implemented and tested
+- an unregularized affine-probe evaluation path is implemented and tested
 - a debug config is available for small local runs before scaling up
 - proposal-scale experiments have not been completed yet
 
@@ -66,7 +66,8 @@ Record completed experiments here as you run them. A useful format is:
 - choose the main pretrained model for the baseline hidden-state experiment
 - choose the main dataset slice for the project run, ideally something closer to the proposal target than the smoke-test config
 - run layerwise probes at a larger token budget and generate a plot of cosine similarity, MSE, and `R^2` by layer
-- check whether results are stable under different train/test seeds, token budgets, and ridge penalties
+- check whether results are stable under different train/test seeds and token budgets
+- optionally compare against ridge penalties after the affine baseline is established
 - inspect representative well-predicted and poorly predicted tokens to understand failure modes
 - select a model-compatible SAE release and add a feature-activation extraction or loading path
 - compare hidden-state predictability against feature-level predictability once the SAE path is in place

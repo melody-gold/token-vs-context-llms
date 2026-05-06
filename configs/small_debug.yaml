@@ -17,7 +17,7 @@ extraction:
   output_path: artifacts/extractions/small_debug.npz
 
 probe:
-  ridge_alpha: 1.0
+  ridge_alpha: 0.0
   test_fraction: 0.2
   random_seed: 0
   output_path: results/generated/small_debug_metrics.json
