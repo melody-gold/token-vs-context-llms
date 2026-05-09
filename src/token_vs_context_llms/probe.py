@@ -10,7 +10,11 @@ from token_vs_context_llms.metrics import mean_cosine_similarity, mean_squared_e
 
 @dataclass(slots=True)
 class LinearProbe:
-    """Affine map from token embeddings to a target representation."""
+    """Affine map from token embeddings to a target representation.
+
+    In this project, the probe is intentionally simple: it asks what a linear
+    map can recover from token identity before the transformer uses context.
+    """
 
     weights: np.ndarray
     bias: np.ndarray
@@ -60,7 +64,6 @@ def fit_affine_probe(x: np.ndarray, y: np.ndarray, alpha: float = 0.0) -> Linear
         ValueError: if inputs are not 2D, row counts differ, or alpha is negative
     """
 
-    # use float64 for a more stable least-squares solve
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
 
@@ -74,21 +77,20 @@ def fit_affine_probe(x: np.ndarray, y: np.ndarray, alpha: float = 0.0) -> Linear
         raise ValueError("alpha must be non-negative.")
 
     if alpha == 0:
-        # add a column of ones so ordinary least squares learns the bias directly
+        # affine baseline: equivalent to one `nn.Linear` weight+bias map
         design = np.column_stack([x, np.ones(x.shape[0], dtype=np.float64)])
         solution, *_ = np.linalg.lstsq(design, y, rcond=None)
         weights = solution[:-1]
         bias = solution[-1]
         return LinearProbe(weights=weights, bias=bias, alpha=alpha)
 
-    # centering lets ridge regularize only the weights while the bias stays unpenalized
+    # ridge ablation path: same probe, with L2 penalty on weights
     x_mean = np.mean(x, axis=0, keepdims=True)
     y_mean = np.mean(y, axis=0, keepdims=True)
     x_centered = x - x_mean
     y_centered = y - y_mean
 
     gram = x_centered.T @ x_centered
-    # diagonal penalty shrinks weights and can help if the solve is ill-conditioned
     regularizer = alpha * np.eye(gram.shape[0], dtype=np.float64)
     weights = np.linalg.solve(gram + regularizer, x_centered.T @ y_centered)
     bias = np.ravel(y_mean - x_mean @ weights)
@@ -139,7 +141,7 @@ def train_test_split(
         raise ValueError("Need at least 2 examples to create a train/test split.")
 
     rng = np.random.default_rng(random_seed)
-    # shuffle once and use the same indices for x and y so rows stay aligned
+    # split token rows: each token position is one supervised example
     indices = rng.permutation(num_examples)
     num_test = max(1, int(round(num_examples * test_fraction)))
     test_indices = indices[:num_test]
@@ -171,12 +173,13 @@ def evaluate_probe(
         tuple containing the fitted probe and its held-out metrics
     """
 
+    # y target can be hidden states now, SAE feature activations later
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_fraction=test_fraction, random_seed=random_seed
     )
     model = fit_affine_probe(x_train, y_train, alpha=alpha)
     predictions = model.predict(x_test)
-    # layer index is filled in by the layerwise wrapper below
+    # compare probe outputs to actual model activations on held-out tokens
     metric = LayerMetric(
         layer_index=-1,
         mean_squared_error=mean_squared_error(y_test, predictions),
@@ -222,7 +225,7 @@ def evaluate_hidden_state_layers(
 
     metrics: list[LayerMetric] = []
     for local_layer, layer_index in enumerate(layer_indices):
-        # use same input embeddings, but change target to this layer's states
+        # same token embeddings, different transformer layer target
         _, metric = evaluate_probe(
             token_embeddings,
             hidden_states[:, local_layer, :],

@@ -11,9 +11,12 @@ import yaml
 class ModelConfig:
     """Configuration for the Hugging Face causal language model."""
 
+    # Hugging Face model id: tokenizer + transformer weights
     name: str = "distilgpt2"
     device: str = "cpu"
+    # max context window used during activation extraction
     max_length: int = 128
+    # selected transformer blocks; None = all block outputs
     layers: list[int] | None = None
 
 
@@ -21,6 +24,7 @@ class ModelConfig:
 class DatasetConfig:
     """Configuration for the text dataset used during activation extraction."""
 
+    # Hugging Face dataset loader inputs
     name: str = "wikitext"
     subset: str | None = "wikitext-2-raw-v1"
     split: str = "train[:64]"
@@ -41,6 +45,7 @@ class ExtractionConfig:
 class ProbeConfig:
     """Configuration for train/test splitting and probe metric output."""
 
+    # 0.0 = affine baseline; >0 = ridge ablation
     ridge_alpha: float = 0.0
     test_fraction: float = 0.2
     random_seed: int = 0
@@ -69,7 +74,7 @@ def load_experiment_config(path: str | Path) -> ExperimentConfig:
     """
 
     raw = _load_yaml(path)
-    # each section is optional so small debug configs can override only what they need
+    # YAML sections map to model/data/extraction/probe stages
     return ExperimentConfig(
         model=ModelConfig(**raw.get("model", {})),
         dataset=DatasetConfig(**raw.get("dataset", {})),
@@ -94,7 +99,7 @@ def _load_yaml(path: str | Path) -> dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as handle:
         loaded = yaml.safe_load(handle) or {}
 
-    # The config loader expects named sections, so lists/strings at the top level are errors
+    # expect named config sections, not a bare list/string
     if not isinstance(loaded, dict):
         raise ValueError(f"Expected mapping at top level of {path}, got {type(loaded)!r}")
 

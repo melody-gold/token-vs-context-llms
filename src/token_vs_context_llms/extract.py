@@ -45,18 +45,19 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
     if not texts:
         raise ValueError("No non-empty texts were found in the configured dataset split.")
 
+    # tokenize raw text (token ids: indices into model embedding table)
     tokenizer = AutoTokenizer.from_pretrained(config.model.name)
-    # some causal LMs do not define a pad token, so reuse EOS for batch padding
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # load causal LM (forward pass returns transformer hidden states)
     model = AutoModelForCausalLM.from_pretrained(config.model.name)
     device = torch.device(config.model.device)
     model.to(device)
     model.eval()
 
     selected_layers: list[int] | None = config.model.layers
-    # store rows in lists first because we may stop partway through the last batch.
+    # probe dataset columns collected from the LLM forward pass
     token_embeddings_rows: list[np.ndarray] = []
     hidden_state_rows: list[np.ndarray] = []
     token_id_rows: list[np.ndarray] = []
@@ -76,13 +77,14 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
 
         with torch.inference_mode():
             outputs = model(**encoded, output_hidden_states=True)
+            # hidden_states[0]: embedding stream; hidden_states[1:]: block outputs
             hidden_states = outputs.hidden_states[1:]
             if selected_layers is None:
-                # Hugging Face returns one hidden-state tensor per layer after the embedding state
                 selected_layers = list(range(len(hidden_states)))
 
-            # Shape after masking will be [num_real_tokens, num_layers, hidden_size]
+            # stack selected block outputs as [batch, seq, layer, hidden]
             stacked_layers = torch.stack([hidden_states[index] for index in selected_layers], dim=2)
+            # token-only input vectors: embedding lookup before attention/context
             embeddings = model.get_input_embeddings()(encoded["input_ids"])
 
         attention_mask = encoded["attention_mask"].bool()
@@ -90,7 +92,7 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
             encoded["input_ids"]
         )
 
-        # the attention mask drops padding so the saved artifact has one row per real token
+        # drop pad positions; keep one row per real token
         batch_embeddings = embeddings[attention_mask].cpu().numpy()
         batch_hidden_states = stacked_layers[attention_mask].cpu().numpy()
         batch_input_ids = encoded["input_ids"][attention_mask].cpu().numpy()
@@ -101,11 +103,12 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
             break
 
         batch_count = min(remaining_tokens, batch_embeddings.shape[0])
-        # keep only as many tokens as needed to hit the configured token budget
+        # truncate final batch to the configured token budget
         token_embeddings_rows.append(batch_embeddings[:batch_count])
         hidden_state_rows.append(batch_hidden_states[:batch_count])
         token_id_rows.append(batch_input_ids[:batch_count])
         position_rows.append(batch_positions[:batch_count])
+        # decoded token labels for later qualitative inspection
         token_strings.extend(tokenizer.convert_ids_to_tokens(batch_input_ids[:batch_count].tolist()))
         total_tokens += batch_count
 
@@ -146,7 +149,7 @@ def _select_texts(dataset: Iterable[dict], text_column: str, max_texts: int) -> 
     """
 
     texts: list[str] = []
-    # look a little past max_texts in case the split has empty rows
+    # scan extra rows because many language-model datasets include blank text rows
     for row in islice(dataset, max_texts * 4):
         value = str(row.get(text_column, "")).strip()
         if value:

@@ -12,8 +12,12 @@ import numpy as np
 class ActivationArtifact:
     """Token-level extraction output used by the probe pipeline."""
 
+    # probe inputs: context-free embedding lookup vectors
     token_embeddings: np.ndarray
+    # probe targets: contextual transformer block states
     hidden_states: np.ndarray
+    # later SAE artifact can mirror this layout with feature activations
+    # token metadata for qualitative error inspection
     input_ids: np.ndarray
     positions: np.ndarray
     tokens: np.ndarray
@@ -34,7 +38,7 @@ def save_artifact(path: str | Path, artifact: ActivationArtifact) -> None:
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    # Use uncompressed npz because these artifacts are regenerable and speed matters.
+    # activation artifact: uncompressed npz for faster write/read
     np.savez(
         target,
         token_embeddings=artifact.token_embeddings,
@@ -44,7 +48,7 @@ def save_artifact(path: str | Path, artifact: ActivationArtifact) -> None:
         tokens=artifact.tokens,
         layer_indices=artifact.layer_indices,
     )
-    # Metadata stays in JSON so it can be inspected without loading a large array file.
+    # sidecar metadata: model/dataset/config provenance
     target.with_suffix(".json").write_text(
         json.dumps(artifact.metadata, indent=2, sort_keys=True),
         encoding="utf-8",
@@ -66,7 +70,7 @@ def load_artifact(path: str | Path) -> ActivationArtifact:
     payload = np.load(source)
     metadata_path = source.with_suffix(".json")
     metadata = {}
-    # older or hand-created artifacts may not have metadata, so treat it as optional
+    # metadata is optional; arrays are enough for probe evaluation
     if metadata_path.exists():
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
 
@@ -95,4 +99,5 @@ def save_metrics(path: str | Path, metrics: list[dict[str, Any]]) -> None:
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
+    # metrics output: small, commit-friendly experiment result
     target.write_text(json.dumps(metrics, indent=2, sort_keys=True), encoding="utf-8")

@@ -6,6 +6,7 @@ from token_vs_context_llms.config import ExperimentConfig, ProbeConfig, load_exp
 from token_vs_context_llms.extract import collect_hidden_state_artifact
 from token_vs_context_llms.io import load_artifact, save_artifact, save_metrics
 from token_vs_context_llms.probe import evaluate_hidden_state_layers, serialize_metrics
+from token_vs_context_llms.summary import load_metrics_json, write_metrics_summary
 
 
 def main() -> None:
@@ -16,6 +17,7 @@ def main() -> None:
     """
 
     parser = argparse.ArgumentParser(description="Token-vs-context experiment runner.")
+    # CLI stages: extract activations, then probe saved activations
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     extract_parser = subparsers.add_parser(
@@ -42,6 +44,14 @@ def main() -> None:
     probe_parser.add_argument("--test-fraction", type=float, help="Override test split fraction.")
     probe_parser.add_argument("--random-seed", type=int, help="Override random seed.")
 
+    summary_parser = subparsers.add_parser(
+        "summarize",
+        help="Write a Markdown summary from a metrics JSON file.",
+    )
+    summary_parser.add_argument("--metrics", required=True, help="Path to metrics JSON.")
+    summary_parser.add_argument("--output", required=True, help="Path to Markdown summary.")
+    summary_parser.add_argument("--title", default="Probe Metrics", help="Summary heading.")
+
     args = parser.parse_args()
     if args.command == "extract":
         run_extract(args.config)
@@ -56,6 +66,10 @@ def main() -> None:
             test_fraction=args.test_fraction,
             random_seed=args.random_seed,
         )
+        return
+
+    if args.command == "summarize":
+        run_summarize(args.metrics, args.output, args.title)
         return
 
     raise ValueError(f"Unsupported command: {args.command}")
@@ -100,7 +114,7 @@ def run_probe(
     """
 
     config = load_experiment_config(config_path) if config_path else ExperimentConfig()
-    # CLI flags win over values loaded from the YAML config
+    # CLI overrides for probe ablations without rerunning LLM extraction
     probe_config = ProbeConfig(
         ridge_alpha=alpha if alpha is not None else config.probe.ridge_alpha,
         test_fraction=test_fraction if test_fraction is not None else config.probe.test_fraction,
@@ -108,7 +122,7 @@ def run_probe(
         output_path=output_path or config.probe.output_path,
     )
 
-    # artifact path can come from either the config or a direct CLI override
+    # probe stage reads saved LLM activations from extract stage
     artifact = load_artifact(artifact_path or config.extraction.output_path)
     metrics = evaluate_hidden_state_layers(
         artifact.token_embeddings,
@@ -121,3 +135,20 @@ def run_probe(
     serialized = serialize_metrics(metrics)
     save_metrics(probe_config.output_path, serialized)
     print(f"Saved metrics to {probe_config.output_path}")
+
+
+def run_summarize(metrics_path: str, output_path: str, title: str) -> None:
+    """Write a Markdown experiment summary from serialized metrics.
+
+    Args:
+        metrics_path: Path to the layerwise metrics JSON file
+        output_path: Path where the Markdown summary should be written
+        title: Markdown heading for the summary
+
+    Returns:
+        None. The formatted summary is written to `output_path`
+    """
+
+    metrics = load_metrics_json(metrics_path)
+    write_metrics_summary(output_path, metrics, title=title)
+    print(f"Saved summary to {output_path}")

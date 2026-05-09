@@ -26,8 +26,10 @@ token-vs-context-llms/
 │   ├── cli.py: command-line entrypoint exposed as `token-vs-context`
 │   ├── config.py: experiment dataclasses and YAML loader
 │   ├── extract.py: Hugging Face extraction pipeline for token embeddings and hidden states
+│   ├── io.py: artifact and metric JSON read/write helpers
 │   ├── metrics.py: cosine similarity, MSE, and R^2
-│   └── probe.py: affine probe fitting and layerwise evaluation
+│   ├── probe.py: affine probe fitting and layerwise evaluation
+│   └── summary.py: Markdown summaries for generated layerwise metrics
 │
 ├── tests/: lightweight unit tests for metrics and probe fitting
 ├── configs/: runnable configs for smoke tests plus templates for larger experiments
@@ -49,6 +51,7 @@ Implemented now:
 - uncompressed artifact storage with sidecar metadata
 - unregularized affine probes trained separately for each selected layer
 - evaluation with cosine similarity, mean squared error, and `R^2`
+- Markdown summaries of layerwise metric JSON files
 - a small local debug config for validating the pipeline end to end
 - no proposal-scale results are committed yet
 
@@ -80,9 +83,15 @@ Run the debug pipeline:
 ```bash
 uv run token-vs-context extract --config configs/small_debug.yaml
 uv run token-vs-context probe --config configs/small_debug.yaml
+uv run token-vs-context summarize \
+  --metrics results/generated/small_debug_metrics.json \
+  --output results/generated/small_debug_summary.md \
+  --title "Small Debug Metrics"
 ```
 
 The extraction step writes a token-level artifact under `artifacts/`. The probe step reads that artifact, fits one linear probe per layer, and writes metrics to `results/`.
+The summary step turns the metrics JSON into a compact Markdown table for writeups
+or experiment logs.
 
 By default, `probe` fits the simple affine baseline with no ridge penalty. Use `--alpha`
 or `probe.ridge_alpha` only for later regularized ablations.
@@ -92,6 +101,14 @@ If `uv run` is unstable on your machine, the environment created by `uv sync` st
 ```bash
 ./.venv/bin/pytest
 ./.venv/bin/token-vs-context probe --config configs/small_debug.yaml
+```
+
+If `token-vs-context` fails with `ModuleNotFoundError: No module named
+'token_vs_context_llms'`, run the command with uv's non-editable install mode:
+
+```bash
+uv run --no-editable token-vs-context extract --config configs/small_debug.yaml
+uv run --no-editable token-vs-context probe --config configs/small_debug.yaml
 ```
 
 ## Experiment Workflow
