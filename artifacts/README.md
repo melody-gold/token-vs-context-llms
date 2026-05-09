@@ -1,6 +1,6 @@
 # Artifacts
 
-Store extracted token-level activations here. Generated `.npz` activation files are
+Store extracted token-level activations here.  Generated `.npz` activation files are
 local, regenerable intermediates and should not be committed.
 
 Expected files:
