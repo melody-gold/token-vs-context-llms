@@ -14,7 +14,7 @@
 
 \addbibresource{final_report/sources.bib}
 
-\graphicspath{{figures/}}
+\graphicspath{{final_report/figures/}}
 
 \geometry{letterpaper, margin=1in}
 
@@ -145,6 +145,21 @@ linear probes can expose recoverable information in those states, and that spars
 methods may decompose activations into interpretable features. This project uses
 those ideas to isolate a specific question: how much of a representation can be
 explained by the current token before any context is used?
+
+\section{Debug Results}
+
+Figure~\ref{fig:pythia-debug-metrics} shows the current debug run using
+Pythia-70M on a small WikiText slice. This run is mainly a pipeline validation:
+it confirms that extraction, probing, summary generation, and plotting work
+end-to-end. The final report should replace or supplement this figure with the
+larger Pile-10k run once that extraction has completed.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{pythia_debug_metrics.png}
+    \caption{Layerwise token-only probe metrics for the Pythia debug run.}
+    \label{fig:pythia-debug-metrics}
+\end{figure}
 
 \printbibliography
 
