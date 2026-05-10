@@ -37,6 +37,10 @@
 \maketitle
 \thispagestyle{fancy}
 
+\begin{abstract}
+...
+\end{abstract}
+
 \section{Introduction}
 
 Large language models represent each token using both its identity and the
@@ -146,6 +150,23 @@ methods may decompose activations into interpretable features. This project uses
 those ideas to isolate a specific question: how much of a representation can be
 explained by the current token before any context is used?
 
+
+\section{Methodology}
+% Model, dataset, activation extraction, probe objective, metrics.
+For each token position, I extracted:
+x = input embedding / embed_activations
+y_l = hidden state at layer l / intermediate_activation
+
+Then I flattened token positions into supervised rows, shuffled them,
+split into train/test, fit one affine probe per layer, and evaluated MSE,
+$R^2$, and cosine similarity.
+
+
+\section{Results}
+% Replace Debug Results with real run if possible.
+% Include plot + table + interpretation.
+
+
 \section{Debug Results}
 
 Figure~\ref{fig:pythia-debug-metrics} shows the current debug run using
@@ -160,6 +181,13 @@ larger Pile-10k run once that extraction has completed.
     \caption{Layerwise token-only probe metrics for the Pythia debug run.}
     \label{fig:pythia-debug-metrics}
 \end{figure}
+
+\section{Discussion}
+% What results mean, limitations, what went right/wrong.
+
+\section{Conclusion}
+% Short final takeaways and future work.
+
 
 \printbibliography
 
