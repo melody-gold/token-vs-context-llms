@@ -4,10 +4,14 @@ from pathlib import Path
 from typing import Any
 
 METRIC_SPECS = (
-    ("mean_squared_error", "MSE"),
-    ("r2_score", r"$R^2$"),
-    ("mean_cosine_similarity", "Mean cosine"),
+    ("mean_squared_error", "MSE", "cornflowerblue"),
+    ("r2_score", r"$R^2$", "darkseagreen"),
+    ("mean_cosine_similarity", "Mean cosine", "rosybrown"),
 )
+
+TEXT_COLOR = "#2f2f2f"
+GRID_COLOR = "#d8d8d8"
+SPINE_COLOR = "#777777"
 
 
 def write_layerwise_metrics_plot(
@@ -31,16 +35,45 @@ def write_layerwise_metrics_plot(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(1, 3, figsize=(12, 3.6), constrained_layout=True)
-    fig.suptitle(title)
+    plt.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
+            "axes.edgecolor": SPINE_COLOR,
+            "axes.labelcolor": TEXT_COLOR,
+            "axes.titlecolor": TEXT_COLOR,
+            "xtick.color": TEXT_COLOR,
+            "ytick.color": TEXT_COLOR,
+            "text.color": TEXT_COLOR,
+        }
+    )
 
-    for axis, (metric_name, label) in zip(axes, METRIC_SPECS, strict=True):
+    fig, axes = plt.subplots(1, 3, figsize=(12, 3.8), constrained_layout=True)
+    fig.patch.set_facecolor("white")
+    fig.suptitle(title, fontsize=15, fontweight="semibold")
+
+    for axis, (metric_name, label, color) in zip(axes, METRIC_SPECS, strict=True):
         values = [_require_float(row, metric_name) for row in sorted_metrics]
-        axis.plot(layers, values, marker="o", linewidth=1.8)
+        axis.plot(
+            layers,
+            values,
+            color=color,
+            marker="o",
+            markerfacecolor="white",
+            markeredgecolor=color,
+            markeredgewidth=1.5,
+            linewidth=2.2,
+        )
         axis.set_xlabel("Layer")
         axis.set_ylabel(label)
-        axis.grid(True, alpha=0.3)
+        axis.set_title(label, fontsize=11, pad=8)
+        axis.grid(True, color=GRID_COLOR, linewidth=0.8, alpha=0.65)
         axis.set_xticks(layers)
+        axis.set_axisbelow(True)
+        axis.spines["top"].set_visible(False)
+        axis.spines["right"].set_visible(False)
+        axis.spines["left"].set_color(SPINE_COLOR)
+        axis.spines["bottom"].set_color(SPINE_COLOR)
 
     fig.savefig(target, dpi=200)
     plt.close(fig)
