@@ -118,6 +118,42 @@ uv run --no-editable token-vs-context probe --config configs/small_debug.yaml
 3. Save the resulting layerwise metrics under `results/` and record the run in `writeup/progress_report.md`.
 4. Once the hidden-state baseline is stable, extend the artifact format or add a parallel path for SAE features.
 
+## Probe Implementation Sketch
+
+The supervised dataset for each probe follows the cache-tensor workflow:
+
+```python
+logits, cache = model.run_with_cache(data)
+
+embed_activations = cache["hook_embed"]              # [batch, n_ctx, d_model]
+layer_activations = cache[f"blocks.{n}.hook_resid_post"]  # [batch, n_ctx, d_model]
+
+x = embed_activations.reshape(-1, d_model)
+y = layer_activations.reshape(-1, d_model)
+```
+
+In this repository, `extract` does the same conceptual step with Hugging Face
+hidden states instead of TransformerLens cache names: it stores context-free
+input embedding vectors as `token_embeddings` and selected contextual block
+outputs as `hidden_states`. Padded positions are removed, so the saved arrays are
+already token-level rows.
+
+The probe is the affine baseline:
+
+```python
+lens = nn.Linear(d_model, d_model, bias=True)
+prediction = lens(batch_x)
+loss = mse(prediction, batch_y)
+```
+
+`src/token_vs_context_llms/probe.py` implements the same linear map. For the
+default baseline, it solves the MSE objective directly with least squares rather
+than taking gradient steps, then evaluates on a shuffled held-out split. This is
+equivalent to training an unregularized `nn.Linear` to convergence on the same
+flattened `(n_samples, d_model)` activation pairs. The helper
+`flatten_token_activations` accepts either already-flat arrays or cache-shaped
+`[batch, n_ctx, d_model]` tensors.
+
 ## Notes
 
 - The extraction code is intentionally minimal so the core probe utilities and tests stay lightweight.

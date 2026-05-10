@@ -64,8 +64,8 @@ def fit_affine_probe(x: np.ndarray, y: np.ndarray, alpha: float = 0.0) -> Linear
         ValueError: if inputs are not 2D, row counts differ, or alpha is negative
     """
 
-    x = np.asarray(x, dtype=np.float64)
-    y = np.asarray(y, dtype=np.float64)
+    x = flatten_token_activations(x)
+    y = flatten_token_activations(y)
 
     if x.ndim != 2 or y.ndim != 2:
         raise ValueError("fit_affine_probe expects 2D arrays for both x and y.")
@@ -112,6 +112,29 @@ def fit_ridge_probe(x: np.ndarray, y: np.ndarray, alpha: float = 0.0) -> LinearP
     return fit_affine_probe(x, y, alpha=alpha)
 
 
+def flatten_token_activations(activations: np.ndarray) -> np.ndarray:
+    """Flatten token activations to one supervised example per token position.
+
+    Args:
+        activations: either a 2D matrix with shape
+            `[num_tokens, hidden_size]` or a batched cache tensor with shape
+            `[batch_size, context_length, hidden_size]`
+
+    Returns:
+        A float64 matrix with shape `[num_tokens, hidden_size]`
+
+    Raises:
+        ValueError: if the input is not 2D or 3D
+    """
+
+    activations = np.asarray(activations, dtype=np.float64)
+    if activations.ndim == 2:
+        return activations
+    if activations.ndim == 3:
+        return activations.reshape(-1, activations.shape[-1])
+    raise ValueError("activations must have shape [num_tokens, dim] or [batch, n_ctx, dim].")
+
+
 def train_test_split(
     x: np.ndarray,
     y: np.ndarray,
@@ -132,6 +155,12 @@ def train_test_split(
     Raises:
         ValueError: if the split fraction is invalid or too few examples exist
     """
+
+    x = flatten_token_activations(x)
+    y = flatten_token_activations(y)
+
+    if x.shape[0] != y.shape[0]:
+        raise ValueError("x and y must have the same number of rows.")
 
     if not 0.0 < test_fraction < 1.0:
         raise ValueError("test_fraction must be between 0 and 1.")
@@ -172,6 +201,9 @@ def evaluate_probe(
     Returns:
         tuple containing the fitted probe and its held-out metrics
     """
+
+    x = flatten_token_activations(x)
+    y = flatten_token_activations(y)
 
     # y target can be hidden states now, SAE feature activations later
     x_train, x_test, y_train, y_test = train_test_split(
