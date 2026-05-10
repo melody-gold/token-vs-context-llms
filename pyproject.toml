@@ -30,6 +30,9 @@ token-vs-context = "token_vs_context_llms.cli:main"
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/token_vs_context_llms"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

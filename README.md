@@ -68,14 +68,14 @@ Planned next:
 Install the lightweight environment and run tests:
 
 ```bash
-uv sync --dev
+uv sync --dev --no-editable
 uv run pytest
 ```
 
 Install optional extraction dependencies as well:
 
 ```bash
-uv sync --all-extras --dev
+uv sync --all-extras --dev --no-editable
 ```
 
 Run the debug pipeline:
@@ -87,11 +87,16 @@ uv run token-vs-context summarize \
   --metrics results/generated/small_debug_metrics.json \
   --output results/generated/small_debug_summary.md \
   --title "Small Debug Metrics"
+uv run token-vs-context plot \
+  --metrics results/generated/small_debug_metrics.json \
+  --output results/generated/small_debug_metrics.png \
+  --title "Small Debug Metrics"
 ```
 
 The extraction step writes a token-level artifact under `artifacts/`. The probe step reads that artifact, fits one linear probe per layer, and writes metrics to `results/`.
 The summary step turns the metrics JSON into a compact Markdown table for writeups
-or experiment logs.
+or experiment logs. The plot step writes a PNG figure with MSE, `R^2`, and mean
+cosine similarity by layer.
 
 By default, `probe` fits the simple affine baseline with no ridge penalty. Use `--alpha`
 or `probe.ridge_alpha` only for later regularized ablations.
@@ -104,11 +109,11 @@ If `uv run` is unstable on your machine, the environment created by `uv sync` st
 ```
 
 If `token-vs-context` fails with `ModuleNotFoundError: No module named
-'token_vs_context_llms'`, run the command with uv's non-editable install mode:
+'token_vs_context_llms'`, refresh the environment with uv's non-editable install
+mode and then rerun the normal commands:
 
 ```bash
-uv run --no-editable token-vs-context extract --config configs/small_debug.yaml
-uv run --no-editable token-vs-context probe --config configs/small_debug.yaml
+uv sync --all-extras --dev --no-editable
 ```
 
 ## Experiment Workflow
@@ -137,6 +142,20 @@ hidden states instead of TransformerLens cache names: it stores context-free
 input embedding vectors as `token_embeddings` and selected contextual block
 outputs as `hidden_states`. Padded positions are removed, so the saved arrays are
 already token-level rows.
+
+The saved artifact names map to the sketch as follows:
+
+```python
+artifact = np.load("artifacts/extractions/pythia_debug.npz")
+
+embed_activations = artifact["token_embeddings"]      # [num_tokens, d_model]
+all_intermediate_activations = artifact["hidden_states"]  # [num_tokens, num_layers, d_model]
+layer_indices = artifact["layer_indices"]
+
+layer_position = 0
+intermediate_activation = all_intermediate_activations[:, layer_position, :]
+model_layer = layer_indices[layer_position]
+```
 
 The probe is the affine baseline:
 
