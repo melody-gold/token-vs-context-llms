@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 
 from token_vs_context_llms.config import ExperimentConfig, ProbeConfig, load_experiment_config
+from token_vs_context_llms.diagnostics import compute_probe_diagnostics, save_probe_diagnostics
 from token_vs_context_llms.extract import collect_hidden_state_artifact
 from token_vs_context_llms.io import load_artifact, save_artifact, save_metrics
-from token_vs_context_llms.plotting import write_layerwise_metrics_plot
+from token_vs_context_llms.plotting import write_diagnostic_plots, write_layerwise_metrics_plot
 from token_vs_context_llms.probe import evaluate_hidden_state_layers, serialize_metrics
 from token_vs_context_llms.summary import load_metrics_json, write_metrics_summary
 
@@ -61,6 +62,37 @@ def main() -> None:
     plot_parser.add_argument("--output", required=True, help="Path to PNG figure.")
     plot_parser.add_argument("--title", default="Layerwise Probe Metrics", help="Figure title.")
 
+    diagnose_parser = subparsers.add_parser(
+        "diagnose",
+        help="Write per-token diagnostics, exploratory figures, and worst-token tables.",
+    )
+    diagnose_parser.add_argument("--config", help="Optional path to experiment YAML config.")
+    diagnose_parser.add_argument(
+        "--artifact",
+        help="Override path to the activation artifact .npz file.",
+    )
+    diagnose_parser.add_argument(
+        "--output-dir",
+        required=True,
+        help="Directory for diagnostic arrays, tables, and figures.",
+    )
+    diagnose_parser.add_argument(
+        "--alpha",
+        type=float,
+        help="Override ridge alpha. Use 0 for the unregularized affine baseline.",
+    )
+    diagnose_parser.add_argument(
+        "--test-fraction",
+        type=float,
+        help="Override test split fraction.",
+    )
+    diagnose_parser.add_argument("--random-seed", type=int, help="Override random seed.")
+    diagnose_parser.add_argument(
+        "--title",
+        default="Probe Diagnostics",
+        help="Figure title prefix.",
+    )
+
     args = parser.parse_args()
     if args.command == "extract":
         run_extract(args.config)
@@ -83,6 +115,18 @@ def main() -> None:
 
     if args.command == "plot":
         run_plot(args.metrics, args.output, args.title)
+        return
+
+    if args.command == "diagnose":
+        run_diagnose(
+            config_path=args.config,
+            artifact_path=args.artifact,
+            output_dir=args.output_dir,
+            alpha=args.alpha,
+            test_fraction=args.test_fraction,
+            random_seed=args.random_seed,
+            title=args.title,
+        )
         return
 
     raise ValueError(f"Unsupported command: {args.command}")
@@ -182,3 +226,47 @@ def run_plot(metrics_path: str, output_path: str, title: str) -> None:
     metrics = load_metrics_json(metrics_path)
     write_layerwise_metrics_plot(output_path, metrics, title=title)
     print(f"Saved plot to {output_path}")
+
+
+def run_diagnose(
+    config_path: str | None,
+    artifact_path: str | None,
+    output_dir: str,
+    alpha: float | None,
+    test_fraction: float | None,
+    random_seed: int | None,
+    title: str,
+) -> None:
+    """Write exploratory per-token probe diagnostics.
+
+    Args:
+        config_path: Optional path to the experiment YAML file
+        artifact_path: Optional override for the activation artifact path
+        output_dir: Directory for diagnostic arrays, tables, and figures
+        alpha: Optional override for the ridge penalty
+        test_fraction: Optional override for the held-out test fraction
+        random_seed: Optional override for the train/test split seed
+        title: Figure title prefix
+
+    Returns:
+        None. Diagnostics are written under `output_dir`
+    """
+
+    config = load_experiment_config(config_path) if config_path else ExperimentConfig()
+    probe_config = ProbeConfig(
+        ridge_alpha=alpha if alpha is not None else config.probe.ridge_alpha,
+        test_fraction=test_fraction if test_fraction is not None else config.probe.test_fraction,
+        random_seed=random_seed if random_seed is not None else config.probe.random_seed,
+        output_path=config.probe.output_path,
+    )
+
+    artifact = load_artifact(artifact_path or config.extraction.output_path)
+    diagnostics = compute_probe_diagnostics(
+        artifact,
+        alpha=probe_config.ridge_alpha,
+        test_fraction=probe_config.test_fraction,
+        random_seed=probe_config.random_seed,
+    )
+    save_probe_diagnostics(output_dir, diagnostics)
+    write_diagnostic_plots(output_dir, diagnostics, title_prefix=title)
+    print(f"Saved diagnostics to {output_dir}")

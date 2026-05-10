@@ -17,9 +17,9 @@ class ActivationArtifact:
     `intermediate_activation`.
     """
 
-    # embed_activations (probe inputs): context-free embedding lookup vectors, [num_tokens, d_model]
+    # embed_activations: context-free embedding lookup vectors, [num_tokens, d_model]
     token_embeddings: np.ndarray
-    # intermediate activations (probe targets): contextual block states, [num_tokens, num_layers, d_model]
+    # intermediate activations: contextual block states, [num_tokens, num_layers, d_model]
     hidden_states: np.ndarray
     # later SAE artifact can mirror this layout with feature activations
     # token metadata for qualitative error inspection

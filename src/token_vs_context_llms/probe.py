@@ -169,6 +169,31 @@ def train_test_split(
     if num_examples < 2:
         raise ValueError("Need at least 2 examples to create a train/test split.")
 
+    train_indices, test_indices = train_test_indices(
+        num_examples,
+        test_fraction=test_fraction,
+        random_seed=random_seed,
+    )
+
+    if train_indices.size == 0:
+        raise ValueError("Train split is empty; decrease test_fraction or add more data.")
+
+    return x[train_indices], x[test_indices], y[train_indices], y[test_indices]
+
+
+def train_test_indices(
+    num_examples: int,
+    test_fraction: float = 0.2,
+    random_seed: int = 0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return deterministic shuffled train/test row indices."""
+
+    if not 0.0 < test_fraction < 1.0:
+        raise ValueError("test_fraction must be between 0 and 1.")
+
+    if num_examples < 2:
+        raise ValueError("Need at least 2 examples to create a train/test split.")
+
     rng = np.random.default_rng(random_seed)
     # split token rows: each token position is one supervised example
     indices = rng.permutation(num_examples)
@@ -179,7 +204,7 @@ def train_test_split(
     if train_indices.size == 0:
         raise ValueError("Train split is empty; decrease test_fraction or add more data.")
 
-    return x[train_indices], x[test_indices], y[train_indices], y[test_indices]
+    return train_indices, test_indices
 
 
 def evaluate_probe(
@@ -261,7 +286,7 @@ def evaluate_hidden_state_layers(
 
     metrics: list[LayerMetric] = []
     for local_layer, layer_index in enumerate(layer_indices):
-        # same embed_activations (token embeddings), different intermediate_activation (transformer layer) target
+        # same embed_activations, different intermediate_activation target
         intermediate_activation = hidden_states[:, local_layer, :]
         _, metric = evaluate_probe(
             token_embeddings,

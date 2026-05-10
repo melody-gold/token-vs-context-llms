@@ -91,12 +91,19 @@ uv run token-vs-context plot \
   --metrics results/generated/small_debug_metrics.json \
   --output results/generated/small_debug_metrics.png \
   --title "Small Debug Metrics"
+uv run token-vs-context diagnose \
+  --config configs/small_debug.yaml \
+  --output-dir results/generated/small_debug_diagnostics \
+  --title "Small Debug Diagnostics"
 ```
 
 The extraction step writes a token-level artifact under `artifacts/`. The probe step reads that artifact, fits one linear probe per layer, and writes metrics to `results/`.
 The summary step turns the metrics JSON into a compact Markdown table for writeups
 or experiment logs. The plot step writes a PNG figure with MSE, `R^2`, and mean
 cosine similarity by layer.
+The diagnose step writes optional exploratory figures and tables, including
+per-token cosine distributions, error by token position, probe-vs-baseline MSE,
+activation norm versus error, a token-layer heatmap, and a worst-token table.
 
 By default, `probe` fits the simple affine baseline with no ridge penalty. Use `--alpha`
 or `probe.ridge_alpha` only for later regularized ablations.
