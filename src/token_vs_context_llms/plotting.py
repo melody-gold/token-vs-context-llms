@@ -22,9 +22,9 @@ LAYER_PALETTE = (
     "cornflowerblue",
     "darkseagreen",
     "rosybrown",
-    "plum",
-    "darkorange",
-    "mediumturquoise",
+    "mediumvioletred",
+    "darkturquoise",
+    "goldenrod",
 )
 
 
