@@ -153,13 +153,19 @@ def _write_cosine_boxplot(
         patch_artist=True,
         labels=[str(int(layer)) for layer in diagnostics.layer_indices],
         medianprops={"color": TEXT_COLOR, "linewidth": 1.4},
-        boxprops={"color": SPINE_COLOR},
-        whiskerprops={"color": SPINE_COLOR},
-        capprops={"color": SPINE_COLOR},
-        flierprops={"marker": ".", "markersize": 3, "markeredgecolor": "rosybrown"},
+        boxprops={"color": "cornflowerblue", "linewidth": 1.4},
+        whiskerprops={"color": SPINE_COLOR, "linewidth": 1.2},
+        capprops={"color": SPINE_COLOR, "linewidth": 1.2},
+        flierprops={
+            "marker": ".",
+            "markersize": 3,
+            "markeredgecolor": "cornflowerblue",
+            "markerfacecolor": "cornflowerblue",
+        },
     )
     for patch in box["boxes"]:
         patch.set_facecolor("cornflowerblue")
+        patch.set_edgecolor("cornflowerblue")
         patch.set_alpha(0.45)
     _finish_axis(axis, "Layer", "Held-out per-token cosine")
     axis.set_title(f"{title_prefix}: cosine distribution by layer")
@@ -231,7 +237,7 @@ def _write_norm_vs_error(
     title_prefix: str,
     max_points_per_layer: int = 500,
 ) -> None:
-    fig, axis = plt.subplots(figsize=(7.2, 4.4), constrained_layout=True)
+    fig, axis = plt.subplots(figsize=(7.2, 6.4), constrained_layout=True)
     colors = _layer_colors(len(diagnostics.layer_indices))
 
     for local_layer, layer_index in enumerate(diagnostics.layer_indices):

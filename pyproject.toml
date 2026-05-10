@@ -14,8 +14,9 @@ dependencies = [
 llm = [
   "datasets>=3.2",
   "torch>=2.5",
+  "tokenizers>=0.22",
   "tqdm>=4.67",
-  "transformers>=4.48",
+  "transformers>=4.48,<5",
 ]
 
 [dependency-groups]
