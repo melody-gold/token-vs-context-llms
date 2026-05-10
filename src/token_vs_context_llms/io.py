@@ -10,11 +10,16 @@ import numpy as np
 
 @dataclass(slots=True)
 class ActivationArtifact:
-    """Token-level extraction output used by the probe pipeline."""
+    """Token-level extraction output used by the probe pipeline.
 
-    # probe inputs: context-free embedding lookup vectors
+    `token_embeddings` is `embed_activations`, and each
+    `hidden_states[:, layer_position, :]` slice is one
+    `intermediate_activation`.
+    """
+
+    # embed_activations (probe inputs): context-free embedding lookup vectors, [num_tokens, d_model]
     token_embeddings: np.ndarray
-    # probe targets: contextual transformer block states
+    # intermediate activations (probe targets): contextual block states, [num_tokens, num_layers, d_model]
     hidden_states: np.ndarray
     # later SAE artifact can mirror this layout with feature activations
     # token metadata for qualitative error inspection
@@ -48,7 +53,8 @@ def save_artifact(path: str | Path, artifact: ActivationArtifact) -> None:
         tokens=artifact.tokens,
         layer_indices=artifact.layer_indices,
     )
-    # sidecar metadata: model/dataset/config provenance
+    
+    # sidecar metadata: model/dataset/config origin
     target.with_suffix(".json").write_text(
         json.dumps(artifact.metadata, indent=2, sort_keys=True),
         encoding="utf-8",

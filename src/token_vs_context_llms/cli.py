@@ -5,6 +5,7 @@ import argparse
 from token_vs_context_llms.config import ExperimentConfig, ProbeConfig, load_experiment_config
 from token_vs_context_llms.extract import collect_hidden_state_artifact
 from token_vs_context_llms.io import load_artifact, save_artifact, save_metrics
+from token_vs_context_llms.plotting import write_layerwise_metrics_plot
 from token_vs_context_llms.probe import evaluate_hidden_state_layers, serialize_metrics
 from token_vs_context_llms.summary import load_metrics_json, write_metrics_summary
 
@@ -52,6 +53,14 @@ def main() -> None:
     summary_parser.add_argument("--output", required=True, help="Path to Markdown summary.")
     summary_parser.add_argument("--title", default="Probe Metrics", help="Summary heading.")
 
+    plot_parser = subparsers.add_parser(
+        "plot",
+        help="Write a PNG figure from a metrics JSON file.",
+    )
+    plot_parser.add_argument("--metrics", required=True, help="Path to metrics JSON.")
+    plot_parser.add_argument("--output", required=True, help="Path to PNG figure.")
+    plot_parser.add_argument("--title", default="Layerwise Probe Metrics", help="Figure title.")
+
     args = parser.parse_args()
     if args.command == "extract":
         run_extract(args.config)
@@ -70,6 +79,10 @@ def main() -> None:
 
     if args.command == "summarize":
         run_summarize(args.metrics, args.output, args.title)
+        return
+
+    if args.command == "plot":
+        run_plot(args.metrics, args.output, args.title)
         return
 
     raise ValueError(f"Unsupported command: {args.command}")
@@ -152,3 +165,20 @@ def run_summarize(metrics_path: str, output_path: str, title: str) -> None:
     metrics = load_metrics_json(metrics_path)
     write_metrics_summary(output_path, metrics, title=title)
     print(f"Saved summary to {output_path}")
+
+
+def run_plot(metrics_path: str, output_path: str, title: str) -> None:
+    """Write a layerwise metrics figure from serialized metrics.
+
+    Args:
+        metrics_path: Path to the layerwise metrics JSON file
+        output_path: Path where the PNG figure should be written
+        title: Figure title
+
+    Returns:
+        None. The plotted figure is written to `output_path`
+    """
+
+    metrics = load_metrics_json(metrics_path)
+    write_layerwise_metrics_plot(output_path, metrics, title=title)
+    print(f"Saved plot to {output_path}")

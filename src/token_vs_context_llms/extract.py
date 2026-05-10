@@ -82,9 +82,9 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
             if selected_layers is None:
                 selected_layers = list(range(len(hidden_states)))
 
-            # stack selected block outputs as [batch, seq, layer, hidden]
+            # intermediate activations: selected block outputs as [batch, seq, layer, d_model]
             stacked_layers = torch.stack([hidden_states[index] for index in selected_layers], dim=2)
-            # token-only input vectors: embedding lookup before attention/context
+            # embed_activations: token-only input vectors before attention/context
             embeddings = model.get_input_embeddings()(encoded["input_ids"])
 
         attention_mask = encoded["attention_mask"].bool()
@@ -119,7 +119,9 @@ def collect_hidden_state_artifact(config: ExperimentConfig) -> ActivationArtifac
         raise ValueError("Extraction produced no token-level activations.")
 
     return ActivationArtifact(
+        # token_embeddings corresponds to professor sketch: embed_activations
         token_embeddings=np.concatenate(token_embeddings_rows, axis=0),
+        # hidden_states[:, i, :] corresponds to one intermediate_activation target
         hidden_states=np.concatenate(hidden_state_rows, axis=0),
         input_ids=np.concatenate(token_id_rows, axis=0),
         positions=np.concatenate(position_rows, axis=0),

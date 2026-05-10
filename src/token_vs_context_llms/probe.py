@@ -126,7 +126,7 @@ def flatten_token_activations(activations: np.ndarray) -> np.ndarray:
     Raises:
         ValueError: if the input is not 2D or 3D
     """
-
+    # flatten first 2 dims of the tensors, so each is [n_samples, d_model]
     activations = np.asarray(activations, dtype=np.float64)
     if activations.ndim == 2:
         return activations
@@ -233,6 +233,10 @@ def evaluate_hidden_state_layers(
 ) -> list[LayerMetric]:
     """Evaluate one token-only probe for each selected hidden-state layer.
 
+    `token_embeddings` is the flattened `embed_activations` array. For each
+    selected layer, `hidden_states[:, local_layer, :]` is the flattened
+    `intermediate_activation` target.
+
     Args:
         token_embeddings: input embedding matrix with one row per token
         hidden_states: hidden-state tensor with shape
@@ -257,10 +261,11 @@ def evaluate_hidden_state_layers(
 
     metrics: list[LayerMetric] = []
     for local_layer, layer_index in enumerate(layer_indices):
-        # same token embeddings, different transformer layer target
+        # same embed_activations (token embeddings), different intermediate_activation (transformer layer) target
+        intermediate_activation = hidden_states[:, local_layer, :]
         _, metric = evaluate_probe(
             token_embeddings,
-            hidden_states[:, local_layer, :],
+            intermediate_activation,
             alpha=alpha,
             test_fraction=test_fraction,
             random_seed=random_seed,
