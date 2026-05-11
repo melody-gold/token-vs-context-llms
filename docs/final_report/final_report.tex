@@ -228,7 +228,6 @@ This project tested how much of a transformer's hidden state can be reconstructe
 
 With more time, I would run the same experiment on larger Pythia checkpoints, add ridge-regularized and nonlinear-probe ablations, compare shuffled-context or same-token baselines, and extend the pipeline to sparse autoencoder features. The sparse-feature version would be the most interpretable next step because it would turn the current whole-vector question into a feature-level question: which features are token-local, and which require context?
 
-\printbibliography
 \bibliographystyle{plainnat}
 \bibliography{final_report/sources}
 
@@ -240,7 +239,8 @@ The main experiments use the following configuration files:
     \item Pythia-70M: configs/pythia70m.yaml
     \item Pythia-160M: configs/pythia160m.yaml
 \end{itemize}
-Both use an 80/20 train/test split with random seed 0 and no ridge regularization. The generated metrics are stored in results/generated/, and the figures used in this report are stored under the final report figures directory.
+
+The seed-0 split is used for the tables and diagnostic examples in the report. The main layerwise metric plots in Figures~\ref{fig:pythia-70m-metrics} and~\ref{fig:pythia-160m-metrics} use 10 train/test splits with seeds 0 through 9, and their shaded regions show one standard deviation across splits. No ridge regularization is used. The generated metrics are stored in results/generated/, and the figures used in this report are stored under the final report figures directory.
 
 \section{Additional Diagnostic Figures}
 \label{app:diagnostic-figures}
