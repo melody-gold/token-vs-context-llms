@@ -1,36 +1,56 @@
-\documentclass[12pt]{article}
+\pdfoutput=1
+\documentclass[10pt]{article}
 \usepackage{amsmath, amsthm, amssymb}
+\usepackage{amsfonts}
 \usepackage{array}
-\usepackage[backend=biber]{biblatex}
+\usepackage{booktabs}
 \usepackage{enumitem}
-\usepackage{fancyhdr}
 \usepackage{float}
+\usepackage{fancyhdr} 
 \usepackage{geometry}
 \usepackage{graphicx}
-\usepackage{hyperref}
+\usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage{tikz}
-
-
-\addbibresource{final_report/sources.bib}
-
-\graphicspath{{final_report/figures/}}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
 
 \geometry{letterpaper, margin=1in}
+\graphicspath{{final_report/figures/}}
+\setlength{\parindent}{1.5em}
+\setlength{\parskip}{0pt}
+\setlist{nosep}
 
+%Header
 \pagestyle{fancy}
 \fancyhf{}
-
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{1em}
-
-\lhead{MATH 598}
-\rhead{Final Report}
+\fancyhead[L]{Token vs Context in LLM Representations}
+\fancyhead[R]{Melody Goldanloo}
 \cfoot{\thepage}
 
-\title{Token vs Context in LLM Representations}
-\author{Melody Goldanloo}
-\date{}
+\title{\textsc{Token vs Context in LLM Representations}\\[0.4em]
+\large\textsc{MATH 598 Final Project}}
+
+\author{Melody Goldanloo \\
+    Colorado School of Mines}
+\date{May 2026}
+
+\newcommand{\keywords}[1]{%
+  \begin{center}
+    \small\textbf{Keywords:} #1
+  \end{center}
+}
+
+\renewenvironment{abstract}{%
+  \begin{center}
+    \textsc{Abstract}
+  \end{center}
+  \begin{quote}\small
+}{%
+  \end{quote}
+}
 
 \begin{document}
 

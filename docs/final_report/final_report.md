@@ -2,6 +2,20 @@
 
 Melody Goldanloo
 
+## Abstract
+
+Transformer hidden states combine information from the current token with
+information drawn from the preceding context. This project measures that
+transition using a token-only reconstruction probe: for each held-out token, an
+affine map is trained to predict a layer's hidden state from the token's input
+embedding alone. I apply this method to EleutherAI Pythia-70M and Pythia-160M on
+samples from Pile-10k. In both models, the first layer is strongly recoverable
+from token identity, while middle layers become much less predictable. The
+Pythia-160M run shows a clear early drop from `R^2 = 0.76` at layer 0 to about
+`0.11` across layers 3-8. The final layer in both models has unusually high
+cosine similarity despite large mean squared error, which appears to be a scale
+effect rather than evidence of complete reconstruction.
+
 ## Introduction
 
 Large language models represent each token using both its identity and the
