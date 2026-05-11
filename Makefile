@@ -9,11 +9,11 @@ PYTHIA160M_NAME := pythia_160m_pile10k_50k
 PYTHIA160M_TITLE := Pythia-160M, Pile-10k
 
 final-report:
-	cd docs && pdflatex final_report/final_report.tex && biber final_report && pdflatex final_report/final_report.tex && pdflatex final_report/final_report.tex
+	cd docs && pdflatex final_report/final_report.tex && bibtex final_report && pdflatex final_report/final_report.tex && pdflatex final_report/final_report.tex
 	$(MAKE) final-report-clean
 
 final-report-clean:
-	rm -f docs/final_report.aux docs/final_report.bbl docs/final_report.bcf docs/final_report.blg docs/final_report.log docs/final_report.out docs/final_report.run.xml docs/final_report.toc
+	rm -f docs/final_report.aux docs/final_report.bbl docs/final_report.bcf docs/final_report.blg docs/final_report.log docs/final_report.out docs/final_report.run.xml docs/final_report.toc docs/missfont.log
 
 run-70m:
 	uv run --no-sync token-vs-context extract --config "$(PYTHIA70M_CONFIG)"
