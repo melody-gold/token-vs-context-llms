@@ -1,4 +1,4 @@
-.PHONY: final-report final-report-clean run-70m run-160m figures-70m figures-160m
+.PHONY: final-report final-report-clean run-70m run-160m figures-70m figures-160m figures-comparison
 
 PYTHIA70M_CONFIG := configs/pythia70m.yaml
 PYTHIA70M_NAME := pythia_pile10k
@@ -34,3 +34,6 @@ figures-160m:
 	uv run --no-sync token-vs-context summarize --metrics "results/generated/$(PYTHIA160M_NAME)_metrics.json" --output "results/generated/$(PYTHIA160M_NAME)_summary.md" --title "$(PYTHIA160M_TITLE) Metrics"
 	uv run --no-sync token-vs-context plot --metrics "results/generated/$(PYTHIA160M_NAME)_metrics.json" --output "docs/final_report/figures/$(PYTHIA160M_NAME)_metrics.png" --title "$(PYTHIA160M_TITLE)"
 	uv run --no-sync token-vs-context diagnose --config "$(PYTHIA160M_CONFIG)" --output-dir "docs/final_report/figures/$(PYTHIA160M_NAME)_diagnostics" --title "$(PYTHIA160M_TITLE)"
+
+figures-comparison:
+	uv run --no-sync token-vs-context compare --metrics "results/generated/$(PYTHIA70M_NAME)_metrics.json" "results/generated/$(PYTHIA160M_NAME)_metrics.json" --labels "Pythia-70M" "Pythia-160M" --output "docs/final_report/figures/pythia_r2_model_comparison.png" --title 'Token-Only $$R^2$$ Across Model Depth'

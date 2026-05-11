@@ -6,7 +6,11 @@ from token_vs_context_llms.config import ExperimentConfig, ProbeConfig, load_exp
 from token_vs_context_llms.diagnostics import compute_probe_diagnostics, save_probe_diagnostics
 from token_vs_context_llms.extract import collect_hidden_state_artifact
 from token_vs_context_llms.io import load_artifact, save_artifact, save_metrics
-from token_vs_context_llms.plotting import write_diagnostic_plots, write_layerwise_metrics_plot
+from token_vs_context_llms.plotting import (
+    write_diagnostic_plots,
+    write_layerwise_metrics_plot,
+    write_r2_model_comparison_plot,
+)
 from token_vs_context_llms.probe import evaluate_hidden_state_layers, serialize_metrics
 from token_vs_context_llms.summary import load_metrics_json, write_metrics_summary
 
@@ -62,6 +66,29 @@ def main() -> None:
     plot_parser.add_argument("--output", required=True, help="Path to PNG figure.")
     plot_parser.add_argument("--title", default="Layerwise Probe Metrics", help="Figure title.")
 
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="Write a side-by-side R^2 comparison figure from two metrics JSON files.",
+    )
+    compare_parser.add_argument(
+        "--metrics",
+        nargs="+",
+        required=True,
+        help="One or more metrics JSON paths.",
+    )
+    compare_parser.add_argument(
+        "--labels",
+        nargs="+",
+        required=True,
+        help="Model labels in the same order as --metrics.",
+    )
+    compare_parser.add_argument("--output", required=True, help="Path to PNG figure.")
+    compare_parser.add_argument(
+        "--title",
+        default=r"Token-Only $R^2$ Across Model Depth",
+        help="Figure title.",
+    )
+
     diagnose_parser = subparsers.add_parser(
         "diagnose",
         help="Write per-token diagnostics, exploratory figures, and worst-token tables.",
@@ -115,6 +142,10 @@ def main() -> None:
 
     if args.command == "plot":
         run_plot(args.metrics, args.output, args.title)
+        return
+
+    if args.command == "compare":
+        run_compare(args.metrics, args.labels, args.output, args.title)
         return
 
     if args.command == "diagnose":
@@ -226,6 +257,35 @@ def run_plot(metrics_path: str, output_path: str, title: str) -> None:
     metrics = load_metrics_json(metrics_path)
     write_layerwise_metrics_plot(output_path, metrics, title=title)
     print(f"Saved plot to {output_path}")
+
+
+def run_compare(
+    metrics_paths: list[str],
+    labels: list[str],
+    output_path: str,
+    title: str,
+) -> None:
+    """Write a normalized-depth R^2 comparison figure.
+
+    Args:
+        metrics_paths: Paths to the layerwise metrics JSON files
+        labels: Model labels matching the metric paths
+        output_path: Path where the PNG figure should be written
+        title: Figure title
+
+    Returns:
+        None. The plotted figure is written to `output_path`
+    """
+
+    if len(metrics_paths) != len(labels):
+        raise ValueError("--metrics and --labels must have the same number of entries.")
+
+    model_metrics = [
+        (label, load_metrics_json(metrics_path))
+        for label, metrics_path in zip(labels, metrics_paths, strict=True)
+    ]
+    write_r2_model_comparison_plot(output_path, model_metrics, title=title)
+    print(f"Saved comparison plot to {output_path}")
 
 
 def run_diagnose(

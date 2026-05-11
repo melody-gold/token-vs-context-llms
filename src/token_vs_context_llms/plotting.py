@@ -19,6 +19,15 @@ TEXT_COLOR = "#2f2f2f"
 GRID_COLOR = "#d8d8d8"
 SPINE_COLOR = "#777777"
 CONTINUOUS_CMAP = "magma"
+FIGURE_TITLE_SIZE = 18
+COMPARISON_TITLE_SIZE = 14
+COMPARISON_AXIS_TITLE_SIZE = 16
+AXIS_TITLE_SIZE = 16
+LABEL_SIZE = 14
+TICK_SIZE = 9
+LEGEND_SIZE = 10
+COLORBAR_LABEL_SIZE = 12
+COLORBAR_TICK_SIZE = 9
 LAYER_PALETTE = (
     "cornflowerblue",
     "darkseagreen",
@@ -56,22 +65,11 @@ def write_layerwise_metrics_plot(
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    plt.rcParams.update(
-        {
-            "font.family": "serif",
-            "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
-            "axes.edgecolor": SPINE_COLOR,
-            "axes.labelcolor": TEXT_COLOR,
-            "axes.titlecolor": TEXT_COLOR,
-            "xtick.color": TEXT_COLOR,
-            "ytick.color": TEXT_COLOR,
-            "text.color": TEXT_COLOR,
-        }
-    )
+    _apply_paper_style(plt)
 
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.8), constrained_layout=True)
     fig.patch.set_facecolor("white")
-    fig.suptitle(_paper_title(title), fontsize=15, fontweight="semibold")
+    fig.suptitle(_metrics_plot_title(title), fontsize=FIGURE_TITLE_SIZE, fontweight="semibold")
 
     for axis, (metric_name, label, color) in zip(axes, METRIC_SPECS, strict=True):
         values = [_require_float(row, metric_name) for row in sorted_metrics]
@@ -85,16 +83,83 @@ def write_layerwise_metrics_plot(
             markeredgewidth=1.5,
             linewidth=2.2,
         )
-        axis.set_xlabel("Layer")
-        axis.set_ylabel(label)
-        axis.set_title(label, fontsize=11, pad=8)
-        axis.grid(True, color=GRID_COLOR, linewidth=0.8, alpha=0.65)
+        _finish_axis(axis, "Layer", label)
+        _set_axis_title(axis, label)
         axis.set_xticks(layers)
-        axis.set_axisbelow(True)
-        axis.spines["top"].set_visible(False)
-        axis.spines["right"].set_visible(False)
-        axis.spines["left"].set_color(SPINE_COLOR)
-        axis.spines["bottom"].set_color(SPINE_COLOR)
+
+    fig.savefig(target, dpi=200)
+    plt.close(fig)
+
+
+def write_r2_model_comparison_plot(
+    path: str | Path,
+    model_metrics: list[tuple[str, list[dict[str, Any]]]],
+    title: str = "Token-Only R^2 Across Model Depth",
+) -> None:
+    """Write a side-by-side normalized-depth R^2 comparison figure."""
+
+    if not model_metrics:
+        raise ValueError("Cannot plot an empty model comparison.")
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    _apply_paper_style(plt)
+
+    fig, axes = plt.subplots(
+        1,
+        len(model_metrics),
+        figsize=(5.1 * len(model_metrics), 3.9),
+        constrained_layout=True,
+        sharey=True,
+    )
+    axes = np.atleast_1d(axes)
+    fig.patch.set_facecolor("white")
+    fig.suptitle(title, fontsize=COMPARISON_TITLE_SIZE, fontweight="semibold")
+
+    for axis, (model_label, metrics) in zip(axes, model_metrics, strict=True):
+        sorted_metrics = sorted(metrics, key=lambda row: int(row["layer_index"]))
+        if len(sorted_metrics) < 2:
+            raise ValueError(
+                f"{model_label} needs at least two layers for relative-depth plotting."
+            )
+
+        layers = np.asarray([int(row["layer_index"]) for row in sorted_metrics])
+        relative_depth = np.linspace(0.0, 1.0, len(sorted_metrics))
+        r2_values = np.asarray([_require_float(row, "r2_score") for row in sorted_metrics])
+
+        axis.plot(
+            relative_depth,
+            r2_values,
+            color="darkseagreen",
+            marker="o",
+            markerfacecolor="white",
+            markeredgecolor="darkseagreen",
+            markeredgewidth=1.5,
+            linewidth=2.2,
+        )
+        _finish_axis(axis, "Relative depth", r"$R^2$")
+        axis.set_title(model_label, fontsize=COMPARISON_AXIS_TITLE_SIZE, pad=8)
+        axis.set_ylim(0.0, 0.82)
+        axis.set_xlim(-0.03, 1.03)
+        axis.set_xticks([0.0, 0.5, 1.0])
+        axis.set_xticklabels(["0", "0.5", "1"])
+
+        for local_index, (x_value, layer) in enumerate(zip(relative_depth, layers, strict=True)):
+            axis.annotate(
+                str(layer),
+                (x_value, r2_values[local_index]),
+                textcoords="offset points",
+                xytext=(0, 7),
+                ha="center",
+                fontsize=TICK_SIZE,
+                color=TEXT_COLOR,
+            )
 
     fig.savefig(target, dpi=200)
     plt.close(fig)
@@ -150,10 +215,18 @@ def _apply_paper_style(plt: Any) -> None:
             "font.serif": ["Times New Roman", "Times", "DejaVu Serif"],
             "axes.edgecolor": SPINE_COLOR,
             "axes.labelcolor": TEXT_COLOR,
+            "axes.labelsize": LABEL_SIZE,
             "axes.titlecolor": TEXT_COLOR,
+            "axes.titlesize": AXIS_TITLE_SIZE,
+            "axes.titleweight": "semibold",
             "xtick.color": TEXT_COLOR,
+            "xtick.labelsize": TICK_SIZE,
             "ytick.color": TEXT_COLOR,
+            "ytick.labelsize": TICK_SIZE,
             "text.color": TEXT_COLOR,
+            "legend.fontsize": LEGEND_SIZE,
+            "figure.titlesize": FIGURE_TITLE_SIZE,
+            "figure.titleweight": "semibold",
         }
     )
 
@@ -187,7 +260,7 @@ def _write_cosine_boxplot(
         patch.set_edgecolor(color)
         patch.set_alpha(0.45)
     _finish_axis(axis, "Layer", "Held-out per-token cosine")
-    axis.set_title(_paper_title(title_prefix, "Held-Out Cosine Similarity by Layer"))
+    _set_axis_title(axis, _paper_title(title_prefix, "Held-Out Cosine Similarity by Layer"))
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
@@ -206,21 +279,15 @@ def _write_error_by_position(
     log_mse = np.log10(mean_mse + epsilon)
 
     image = axis.imshow(log_mse, aspect="auto", cmap=CONTINUOUS_CMAP, origin="lower")
-    axis.set_title(_paper_title(title_prefix, "Mean Reconstruction Error by Token Position"))
-    axis.set_xlabel("Token position")
-    axis.set_ylabel("Layer")
+    _set_axis_title(axis, _paper_title(title_prefix, "Mean Reconstruction Error by Token Position"))
+    _finish_heatmap_axis(axis, "Token position", "Layer")
     axis.set_yticks(np.arange(len(diagnostics.layer_indices)))
     axis.set_yticklabels([str(int(layer)) for layer in diagnostics.layer_indices])
 
     tick_indices = _token_tick_indices(len(positions), max_ticks=16)
     axis.set_xticks(tick_indices)
     axis.set_xticklabels([str(int(positions[index])) for index in tick_indices])
-    axis.set_axisbelow(True)
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    axis.spines["left"].set_color(SPINE_COLOR)
-    axis.spines["bottom"].set_color(SPINE_COLOR)
-    fig.colorbar(image, ax=axis, label=r"Mean held-out MSE ($\log_{10}$)")
+    _add_colorbar(fig, axis, image, r"Mean held-out MSE ($\log_{10}$)")
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
@@ -246,7 +313,7 @@ def _write_baseline_comparison(
         label="Mean baseline",
     )
     _finish_axis(axis, "Layer", "Held-out MSE")
-    axis.set_title(_paper_title(title_prefix, "Probe Error vs. Mean Baseline"))
+    _set_axis_title(axis, _paper_title(title_prefix, "Probe Error vs. Mean Baseline"))
     axis.set_xticks(layers)
     axis.legend(frameon=False)
     fig.savefig(path, dpi=200)
@@ -279,8 +346,8 @@ def _write_norm_vs_error(
         )
 
     _finish_axis(axis, "Target activation norm", "Held-out MSE")
-    axis.set_title(_paper_title(title_prefix, "Activation Norm vs. Reconstruction Error"))
-    axis.legend(frameon=False, ncol=2, fontsize=8)
+    _set_axis_title(axis, _paper_title(title_prefix, "Activation Norm vs. Reconstruction Error"))
+    axis.legend(frameon=False, ncol=2)
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
@@ -323,12 +390,16 @@ def _write_lens_prediction_examples(
         axis.set_xlim(limits)
         axis.set_ylim(limits)
         axis.set_aspect("equal", adjustable="box")
-        axis.set_title(
+        _set_axis_title(
+            axis,
             f"Layer {int(diagnostics.layer_indices[local_layer])} (r = {correlation:.2f})",
-            fontsize=10,
         )
 
-    fig.suptitle(_paper_title(title_prefix, "Probe Predictions vs. Target Activations"))
+    fig.suptitle(
+        _paper_title(title_prefix, "Probe Predictions vs. Target Activations"),
+        fontsize=FIGURE_TITLE_SIZE,
+        fontweight="semibold",
+    )
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
@@ -351,34 +422,54 @@ def _write_cosine_by_position_heatmap(
         vmin=0.0,
         vmax=1.0,
     )
-    axis.set_title(_paper_title(title_prefix, "Mean Cosine Similarity by Token Position"))
-    axis.set_xlabel("Token position")
-    axis.set_ylabel("Layer")
+    _set_axis_title(axis, _paper_title(title_prefix, "Mean Cosine Similarity by Token Position"))
+    _finish_heatmap_axis(axis, "Token position", "Layer")
     axis.set_yticks(np.arange(len(diagnostics.layer_indices)))
     axis.set_yticklabels([str(int(layer)) for layer in diagnostics.layer_indices])
 
     tick_indices = _token_tick_indices(len(positions), max_ticks=16)
     axis.set_xticks(tick_indices)
     axis.set_xticklabels([str(int(positions[index])) for index in tick_indices])
-    axis.set_axisbelow(True)
-    axis.spines["top"].set_visible(False)
-    axis.spines["right"].set_visible(False)
-    axis.spines["left"].set_color(SPINE_COLOR)
-    axis.spines["bottom"].set_color(SPINE_COLOR)
-    fig.colorbar(image, ax=axis, label="Mean held-out cosine similarity")
+    _add_colorbar(fig, axis, image, "Mean held-out cosine similarity")
     fig.savefig(path, dpi=200)
     plt.close(fig)
+
+
+def _set_axis_title(axis: Any, title: str) -> None:
+    axis.set_title(title, fontsize=AXIS_TITLE_SIZE, fontweight="semibold", pad=8)
 
 
 def _finish_axis(axis: Any, xlabel: str, ylabel: str) -> None:
     axis.set_xlabel(xlabel)
     axis.set_ylabel(ylabel)
     axis.grid(True, color=GRID_COLOR, linewidth=0.8, alpha=0.65)
+    _finish_spines(axis)
+
+
+def _finish_heatmap_axis(axis: Any, xlabel: str, ylabel: str) -> None:
+    axis.set_xlabel(xlabel)
+    axis.set_ylabel(ylabel)
+    _finish_spines(axis)
+
+
+def _finish_spines(axis: Any) -> None:
     axis.set_axisbelow(True)
     axis.spines["top"].set_visible(False)
     axis.spines["right"].set_visible(False)
     axis.spines["left"].set_color(SPINE_COLOR)
     axis.spines["bottom"].set_color(SPINE_COLOR)
+
+
+def _add_colorbar(fig: Any, axis: Any, image: Any, label: str) -> None:
+    colorbar = fig.colorbar(image, ax=axis)
+    colorbar.set_label(label, fontsize=COLORBAR_LABEL_SIZE)
+    colorbar.ax.tick_params(labelsize=COLORBAR_TICK_SIZE, colors=TEXT_COLOR)
+
+
+def _shade_depth_regions(axis: Any) -> None:
+    axis.axvspan(0.0, 0.2, color="cornflowerblue", alpha=0.08, linewidth=0)
+    axis.axvspan(0.2, 0.8, color="darkseagreen", alpha=0.08, linewidth=0)
+    axis.axvspan(0.8, 1.0, color="rosybrown", alpha=0.08, linewidth=0)
 
 
 def _mean_matrix_by_position(
@@ -417,9 +508,19 @@ def _paper_title(prefix: str, topic: str | None = None) -> str:
     return f"{formatted_prefix}: {topic}"
 
 
+def _metrics_plot_title(title: str) -> str:
+    formatted_title = _format_title_prefix(title)
+    if not formatted_title:
+        return "Layerwise Probe Metrics"
+    if re.search(r"\b(Layerwise|Probe)\b", formatted_title, flags=re.IGNORECASE):
+        return "Layerwise Probe Metrics"
+    return f"{formatted_title}: Layerwise Probe Metrics"
+
+
 def _format_title_prefix(prefix: str) -> str:
     cleaned = prefix.strip().replace("_", " ")
     cleaned = re.sub(r"\b(Diagnostics|Metrics)\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*,\s*", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" :-")
     if not cleaned:
         return ""
@@ -429,9 +530,11 @@ def _format_title_prefix(prefix: str) -> str:
         lower = word.lower()
         if lower == "pythia":
             words.append("Pythia")
+        elif match := re.fullmatch(r"pythia[- ]?(\d+)m", lower):
+            words.append(f"Pythia-{match.group(1)}M")
         elif lower == "distilgpt2":
             words.append("DistilGPT-2")
-        elif lower == "pile10k":
+        elif lower in {"pile10k", "pile-10k"}:
             words.append("Pile-10k")
         elif re.fullmatch(r"\d+m", lower):
             words.append(lower.upper())
