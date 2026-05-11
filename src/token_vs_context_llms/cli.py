@@ -11,7 +11,11 @@ from token_vs_context_llms.plotting import (
     write_layerwise_metrics_plot,
     write_r2_model_comparison_plot,
 )
-from token_vs_context_llms.probe import evaluate_hidden_state_layers, serialize_metrics
+from token_vs_context_llms.probe import (
+    evaluate_hidden_state_layers,
+    evaluate_hidden_state_layers_repeated_splits,
+    serialize_metrics,
+)
 from token_vs_context_llms.summary import load_metrics_json, write_metrics_summary
 
 
@@ -49,6 +53,12 @@ def main() -> None:
     )
     probe_parser.add_argument("--test-fraction", type=float, help="Override test split fraction.")
     probe_parser.add_argument("--random-seed", type=int, help="Override random seed.")
+    probe_parser.add_argument(
+        "--random-seeds",
+        nargs="+",
+        type=int,
+        help="Run repeated train/test splits with these seeds and report mean/std metrics.",
+    )
 
     summary_parser = subparsers.add_parser(
         "summarize",
@@ -133,6 +143,7 @@ def main() -> None:
             alpha=args.alpha,
             test_fraction=args.test_fraction,
             random_seed=args.random_seed,
+            random_seeds=args.random_seeds,
         )
         return
 
@@ -186,6 +197,7 @@ def run_probe(
     alpha: float | None,
     test_fraction: float | None,
     random_seed: int | None,
+    random_seeds: list[int] | None,
 ) -> None:
     """Run layerwise probe evaluation and save metrics JSON
 
@@ -196,6 +208,7 @@ def run_probe(
         alpha: Optional override for the ridge penalty
         test_fraction: Optional override for the held-out test fraction
         random_seed: Optional override for the train/test split seed
+        random_seeds: Optional split seeds for repeated-split robustness metrics
 
     Returns:
         None. The serialized metrics are written to the configured output path
@@ -207,19 +220,30 @@ def run_probe(
         ridge_alpha=alpha if alpha is not None else config.probe.ridge_alpha,
         test_fraction=test_fraction if test_fraction is not None else config.probe.test_fraction,
         random_seed=random_seed if random_seed is not None else config.probe.random_seed,
+        random_seeds=random_seeds if random_seeds is not None else config.probe.random_seeds,
         output_path=output_path or config.probe.output_path,
     )
 
     # probe stage reads saved LLM activations from extract stage
     artifact = load_artifact(artifact_path or config.extraction.output_path)
-    metrics = evaluate_hidden_state_layers(
-        artifact.token_embeddings,
-        artifact.hidden_states,
-        artifact.layer_indices,
-        alpha=probe_config.ridge_alpha,
-        test_fraction=probe_config.test_fraction,
-        random_seed=probe_config.random_seed,
-    )
+    if probe_config.random_seeds:
+        metrics = evaluate_hidden_state_layers_repeated_splits(
+            artifact.token_embeddings,
+            artifact.hidden_states,
+            artifact.layer_indices,
+            random_seeds=probe_config.random_seeds,
+            alpha=probe_config.ridge_alpha,
+            test_fraction=probe_config.test_fraction,
+        )
+    else:
+        metrics = evaluate_hidden_state_layers(
+            artifact.token_embeddings,
+            artifact.hidden_states,
+            artifact.layer_indices,
+            alpha=probe_config.ridge_alpha,
+            test_fraction=probe_config.test_fraction,
+            random_seed=probe_config.random_seed,
+        )
     serialized = serialize_metrics(metrics)
     save_metrics(probe_config.output_path, serialized)
     print(f"Saved metrics to {probe_config.output_path}")

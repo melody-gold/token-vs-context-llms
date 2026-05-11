@@ -3,8 +3,10 @@ import pytest
 
 from token_vs_context_llms.probe import (
     evaluate_hidden_state_layers,
+    evaluate_hidden_state_layers_repeated_splits,
     evaluate_probe,
     flatten_token_activations,
+    serialize_metrics,
 )
 
 
@@ -67,3 +69,28 @@ def test_evaluate_hidden_state_layers_returns_one_result_per_layer() -> None:
 
     assert [metric.layer_index for metric in metrics] == [2, 5]
     assert len(metrics) == 2
+
+
+def test_evaluate_hidden_state_layers_repeated_splits_aggregates_seed_variation() -> None:
+    rng = np.random.default_rng(2)
+    x = rng.normal(size=(80, 4))
+    layer_a = x @ rng.normal(size=(4, 3)) + rng.normal(scale=0.05, size=(80, 3))
+    layer_b = x @ rng.normal(size=(4, 3)) + rng.normal(scale=0.05, size=(80, 3))
+    hidden_states = np.stack([layer_a, layer_b], axis=1)
+
+    metrics = evaluate_hidden_state_layers_repeated_splits(
+        x,
+        hidden_states,
+        np.array([0, 1]),
+        random_seeds=[0, 1, 2],
+        test_fraction=0.25,
+    )
+
+    assert [metric.layer_index for metric in metrics] == [0, 1]
+    assert all(metric.num_splits == 3 for metric in metrics)
+    assert all(metric.random_seeds == [0, 1, 2] for metric in metrics)
+    assert all(metric.r2_score_std >= 0 for metric in metrics)
+
+    serialized = serialize_metrics(metrics)
+    assert serialized[0]["num_splits"] == 3
+    assert "r2_score_std" in serialized[0]

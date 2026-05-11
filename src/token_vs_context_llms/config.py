@@ -49,6 +49,8 @@ class ProbeConfig:
     ridge_alpha: float = 0.0
     test_fraction: float = 0.2
     random_seed: int = 0
+    # Optional repeated train/test splits for robustness checks.
+    random_seeds: list[int] | None = None
     output_path: str = "results/generated/small_debug_metrics.json"
 
 

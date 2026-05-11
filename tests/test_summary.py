@@ -34,6 +34,36 @@ def test_format_metrics_summary_orders_layers_and_formats_table() -> None:
     )
 
 
+def test_format_metrics_summary_includes_repeated_split_uncertainty() -> None:
+    metrics = [
+        {
+            "layer_index": 0,
+            "mean_squared_error": 0.125,
+            "r2_score": 0.5,
+            "mean_cosine_similarity": 0.75,
+            "num_train_tokens": 80,
+            "num_test_tokens": 20,
+            "mean_squared_error_std": 0.01,
+            "r2_score_std": 0.02,
+            "mean_cosine_similarity_std": 0.03,
+            "num_splits": 3,
+            "random_seeds": [0, 1, 2],
+        }
+    ]
+
+    summary = format_metrics_summary(metrics, title="Repeated Run")
+
+    assert (
+        "| Layer | MSE | R^2 | Mean cosine | Train tokens | Test tokens | Splits | Seeds |"
+        in summary
+    )
+    assert (
+        "| 0 | 0.125 +/- 0.01 | 0.5 +/- 0.02 | 0.75 +/- 0.03 | "
+        "80 | 20 | 3 | 0, 1, 2 |"
+        in summary
+    )
+
+
 def test_format_metrics_summary_rejects_empty_metrics() -> None:
     with pytest.raises(ValueError, match="empty metrics"):
         format_metrics_summary([])

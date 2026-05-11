@@ -59,24 +59,42 @@ def format_metrics_summary(metrics: list[dict[str, Any]], title: str = "Probe Me
             raise ValueError(f"Metric row {index} is missing required columns: {joined_columns}.")
 
     sorted_metrics = sorted(metrics, key=lambda row: int(row["layer_index"]))
-    lines = [
-        f"# {title}",
-        "",
-        "| Layer | MSE | R^2 | Mean cosine | Train tokens | Test tokens |",
-        "|---:|---:|---:|---:|---:|---:|",
-    ]
+    has_repeated_splits = all("num_splits" in row for row in sorted_metrics)
+    if has_repeated_splits:
+        lines = [
+            f"# {title}",
+            "",
+            "| Layer | MSE | R^2 | Mean cosine | Train tokens | Test tokens | Splits | Seeds |",
+            "|---:|---:|---:|---:|---:|---:|---:|:---|",
+        ]
+    else:
+        lines = [
+            f"# {title}",
+            "",
+            "| Layer | MSE | R^2 | Mean cosine | Train tokens | Test tokens |",
+            "|---:|---:|---:|---:|---:|---:|",
+        ]
+
     for row in sorted_metrics:
+        metric_values = [
+            _format_metric_with_optional_std(row, "mean_squared_error"),
+            _format_metric_with_optional_std(row, "r2_score"),
+            _format_metric_with_optional_std(row, "mean_cosine_similarity"),
+            str(int(row["num_train_tokens"])),
+            str(int(row["num_test_tokens"])),
+        ]
+        if has_repeated_splits:
+            metric_values.extend(
+                [
+                    str(int(row["num_splits"])),
+                    _format_seeds(row.get("random_seeds", [])),
+                ]
+            )
+
         lines.append(
             "| "
             + " | ".join(
-                [
-                    str(int(row["layer_index"])),
-                    _format_float(row["mean_squared_error"]),
-                    _format_float(row["r2_score"]),
-                    _format_float(row["mean_cosine_similarity"]),
-                    str(int(row["num_train_tokens"])),
-                    str(int(row["num_test_tokens"])),
-                ]
+                [str(int(row["layer_index"])), *metric_values]
             )
             + " |"
         )
@@ -88,3 +106,21 @@ def _format_float(value: Any) -> str:
     """Format metric values with enough precision for compact comparisons."""
 
     return f"{float(value):.6g}"
+
+
+def _format_metric_with_optional_std(row: dict[str, Any], metric_name: str) -> str:
+    """Format metric values as mean or mean +/- split standard deviation."""
+
+    mean = _format_float(row[metric_name])
+    std_name = f"{metric_name}_std"
+    if std_name not in row:
+        return mean
+    return f"{mean} +/- {_format_float(row[std_name])}"
+
+
+def _format_seeds(seeds: Any) -> str:
+    """Format repeated split seeds for a compact Markdown table cell."""
+
+    if not isinstance(seeds, list):
+        return ""
+    return ", ".join(str(int(seed)) for seed in seeds)

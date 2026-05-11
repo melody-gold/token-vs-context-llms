@@ -48,6 +48,23 @@ class LayerMetric:
     num_test_tokens: int
 
 
+@dataclass(slots=True)
+class RepeatedLayerMetric:
+    """Mean and split-to-split variation for one probed model layer."""
+
+    layer_index: int
+    mean_squared_error: float
+    r2_score: float
+    mean_cosine_similarity: float
+    num_train_tokens: int
+    num_test_tokens: int
+    mean_squared_error_std: float
+    r2_score_std: float
+    mean_cosine_similarity_std: float
+    num_splits: int
+    random_seeds: list[int]
+
+
 def fit_affine_probe(x: np.ndarray, y: np.ndarray, alpha: float = 0.0) -> LinearProbe:
     """Fit a token-only affine probe from inputs `x` to targets `y`.
 
@@ -301,7 +318,88 @@ def evaluate_hidden_state_layers(
     return metrics
 
 
-def serialize_metrics(metrics: list[LayerMetric]) -> list[dict[str, Any]]:
+def evaluate_hidden_state_layers_repeated_splits(
+    token_embeddings: np.ndarray,
+    hidden_states: np.ndarray,
+    layer_indices: np.ndarray,
+    random_seeds: list[int],
+    alpha: float = 0.0,
+    test_fraction: float = 0.2,
+) -> list[RepeatedLayerMetric]:
+    """Evaluate layerwise probes across multiple train/test splits.
+
+    Args:
+        token_embeddings: input embedding matrix with one row per token
+        hidden_states: hidden-state tensor with shape
+            `[num_tokens, num_layers, hidden_size]`
+        layer_indices: original model layer index for each hidden-state slice
+        random_seeds: seeds used for repeated train/test splits
+        alpha: ridge penalty passed to each probe
+        test_fraction: fraction of tokens held out for evaluation
+
+    Returns:
+        One aggregated metric row per selected layer.
+    """
+
+    if not random_seeds:
+        raise ValueError("random_seeds must contain at least one seed.")
+
+    split_metrics = [
+        evaluate_hidden_state_layers(
+            token_embeddings,
+            hidden_states,
+            layer_indices,
+            alpha=alpha,
+            test_fraction=test_fraction,
+            random_seed=random_seed,
+        )
+        for random_seed in random_seeds
+    ]
+
+    num_layers = len(split_metrics[0])
+    aggregated: list[RepeatedLayerMetric] = []
+    for layer_position in range(num_layers):
+        metrics_for_layer = [metrics[layer_position] for metrics in split_metrics]
+        layer_ids = {metric.layer_index for metric in metrics_for_layer}
+        if len(layer_ids) != 1:
+            raise ValueError("Layer order changed across repeated split evaluations.")
+
+        mse_values = np.asarray(
+            [metric.mean_squared_error for metric in metrics_for_layer], dtype=np.float64
+        )
+        r2_values = np.asarray([metric.r2_score for metric in metrics_for_layer], dtype=np.float64)
+        cosine_values = np.asarray(
+            [metric.mean_cosine_similarity for metric in metrics_for_layer], dtype=np.float64
+        )
+
+        aggregated.append(
+            RepeatedLayerMetric(
+                layer_index=metrics_for_layer[0].layer_index,
+                mean_squared_error=float(np.mean(mse_values)),
+                r2_score=float(np.mean(r2_values)),
+                mean_cosine_similarity=float(np.mean(cosine_values)),
+                num_train_tokens=metrics_for_layer[0].num_train_tokens,
+                num_test_tokens=metrics_for_layer[0].num_test_tokens,
+                mean_squared_error_std=_sample_std(mse_values),
+                r2_score_std=_sample_std(r2_values),
+                mean_cosine_similarity_std=_sample_std(cosine_values),
+                num_splits=len(random_seeds),
+                random_seeds=[int(seed) for seed in random_seeds],
+            )
+        )
+
+    return aggregated
+
+
+def _sample_std(values: np.ndarray) -> float:
+    """Return sample standard deviation, or 0 for a single split."""
+
+    if values.size < 2:
+        return 0.0
+    return float(np.std(values, ddof=1))
+
+
+def serialize_metrics(metrics: list[LayerMetric | RepeatedLayerMetric]) -> list[dict[str, Any]]:
     """Convert metric dataclasses to JSON-serializable dictionaries.
 
     Args:

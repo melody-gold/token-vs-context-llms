@@ -56,6 +56,7 @@ def write_layerwise_metrics_plot(
 
     sorted_metrics = sorted(metrics, key=lambda row: int(row["layer_index"]))
     layers = [int(row["layer_index"]) for row in sorted_metrics]
+    layer_values = np.asarray(layers, dtype=np.float64)
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -72,17 +73,40 @@ def write_layerwise_metrics_plot(
     fig.suptitle(_metrics_plot_title(title), fontsize=FIGURE_TITLE_SIZE, fontweight="semibold")
 
     for axis, (metric_name, label, color) in zip(axes, METRIC_SPECS, strict=True):
-        values = [_require_float(row, metric_name) for row in sorted_metrics]
-        axis.plot(
-            layers,
-            values,
-            color=color,
-            marker="o",
-            markerfacecolor="white",
-            markeredgecolor=color,
-            markeredgewidth=1.5,
-            linewidth=2.2,
-        )
+        values = np.asarray([_require_float(row, metric_name) for row in sorted_metrics])
+        std_name = f"{metric_name}_std"
+        if all(std_name in row for row in sorted_metrics):
+            errors = np.asarray([_require_float(row, std_name) for row in sorted_metrics])
+            axis.fill_between(
+                layer_values,
+                values - errors,
+                values + errors,
+                color=color,
+                alpha=0.3,
+                linewidth=0,
+            )
+            axis.plot(
+                layer_values,
+                values,
+                color=color,
+                marker="o",
+                markerfacecolor="white",
+                markeredgecolor=color,
+                markeredgewidth=1.5,
+                linewidth=2.2,
+                zorder=3,
+            )
+        else:
+            axis.plot(
+                layers,
+                values,
+                color=color,
+                marker="o",
+                markerfacecolor="white",
+                markeredgecolor=color,
+                markeredgewidth=1.5,
+                linewidth=2.2,
+            )
         _finish_axis(axis, "Layer", label)
         _set_axis_title(axis, label)
         axis.set_xticks(layers)
