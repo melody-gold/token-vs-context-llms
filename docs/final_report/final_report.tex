@@ -88,17 +88,26 @@ Together, these lines of work motivate the project's baseline experiment. Prior 
 
 
 \section{Methodology}
-% Model, dataset, activation extraction, probe objective, metrics.
-For each token position, I extracted:
-x = input embedding / embed_activations
-y_l = hidden state at layer l / intermediate_activation
+% ChatGPT helped with the technical explanation in this section (including the math)
+The experiments use two pretrained causal language models from the Pythia suite \cite{biderman2023pythia}: Pythia-70M and Pythia-160M. Pythia was chosen because it is open, small enough to run locally on CPU for this project, and designed for controlled analysis across model sizes. The text data comes from Pile-10k, a small Hugging Face sample derived from the Pile \cite{gao2020pile}. The 70M run uses 25,000 token positions from the first 1,000 examples of Pile-10k; the 160M run uses 50,000 token positions from the Pile-10k training split. Both runs use a maximum sequence length of 128 tokens and remove padding before fitting probes.
 
-Then I flattened token positions into supervised rows, shuffled them,
-split into train/test, fit one affine probe per layer, and evaluated MSE,
-$R^2$, and cosine similarity.
+For each observed token position $i$, the extraction code stores two things: the context-free input embedding $x_i \in \mathbb{R}^d$ and the contextual hidden state $h_{i,\ell} \in \mathbb{R}^d$ at layer $\ell$. The input embedding depends only on the token id, while the hidden state is produced after causal self-attention and feed-forward layers have had access to previous tokens. This makes the supervised learning problem
+\[
+    x_i \mapsto h_{i,\ell}
+\]
+a direct test of how much the hidden state can be recovered from the token alone.
 
+For every layer, I split token positions into 80\% train and 20\% test sets. To check that the results are not just a consequence of a lucky split, I repeat this process 10 times using random seeds 0 through 9. For each split, I then fit one affine probe per layer,
+\[
+    \hat{h}_{i,\ell} = W_\ell x_i + b_\ell,
+\]
+by solving the ordinary least-squares problem on the training split. No ridge regularization is used in the main results. The pipeline code is organized under \texttt{src/}: extraction collects model activations, probing fits the affine maps, and diagnostics produces the per-token plots.
+
+I evaluate each probe on held-out tokens with three metrics. Mean squared error (MSE) measures absolute reconstruction error. The coefficient of determination ($R^2$) compares the probe to a constant mean-target predictor, so values near zero mean the probe adds little beyond the average hidden state. Mean cosine similarity measures directional alignment between predicted and true hidden states. For Figures~\ref{fig:pythia-70m-metrics} and~\ref{fig:pythia-160m-metrics}, the shaded region shows one standard deviation across the 10 splits. Reporting all three metrics matters because cosine similarity can look high even when MSE is large if target vectors have very large norms.
 
 \section{Results}
+
+% Codex helped create the plots + data collection structure
 
 \subsection{Pythia-70M}
 
@@ -204,11 +213,20 @@ Both models show the same broad structure. The earliest hidden states are strong
 The most important caution is that the final-layer cosine spike appears in both models. In the 70M model, the final layer has the largest MSE but the highest cosine. In the 160M model, layer 11 behaves similarly, with MSE 2.58, $R^2$ 0.16, mean cosine 0.99, and mean norm about 270. This makes the final-layer result a metric interaction rather than a simple success case. Direction is preserved well, but magnitude and coordinate-level reconstruction remain poor.
 
 \section{Discussion}
-% What results mean, limitations, what went right/wrong.
+
+The main result is that token identity alone explains a large fraction of early hidden-state structure but much less of the middle-layer structure. This matches the intuition that the first transformer blocks still carry strong lexical information, while later blocks have mixed in more context from previous tokens. The results do not prove that all unexplained variance is context information: some of it could be nonlinear token effects, probe misspecification, model normalization behavior, or noise from the finite sample. Still, because the probe receives no previous-token information, the sharp drop in held-out $R^2$ is strong evidence that the representation is no longer mostly a linear function of the current token embedding.
+
+Several parts of the project worked well. The extraction, probing, plotting, and diagnostic pipeline is reproducible from YAML configs, and the Pythia-160M run extends the analysis beyond a toy smoke test. The main layerwise metric plots also use 10 train/test splits, which makes those trends more trustworthy than a single split alone. The diagnostics also caught an important interpretability issue: cosine similarity alone would make the final layer look almost perfectly reconstructed, while MSE and $R^2$ show that this would be misleading.
+
+The main limitation is scale. These experiments use small models and relatively small token samples because the full activation tensors are expensive to store and process locally. The probe is also intentionally simple. An affine map is a clean baseline, but a poor affine reconstruction does not rule out nonlinear token-only predictability. Finally, the present report analyzes whole hidden states rather than interpretable features, so the results say where token-only predictability changes but not exactly which semantic or syntactic features become context-dependent.
 
 \section{Conclusion}
-% Short final takeaways and future work.
 
+This project tested how much of a transformer's hidden state can be reconstructed from the current token embedding alone. Across Pythia-70M and Pythia-160M, the answer is layer-dependent: early layers are substantially token-predictable, but middle layers are not. The Pythia-160M curve in particular suggests that most of the transition happens by about layer 3. The final layer shows strong directional alignment with poor absolute reconstruction, demonstrating why MSE, $R^2$, and cosine should be interpreted together.
+
+\subsection{Future Work}
+
+With more time, I would run the same experiment on larger Pythia checkpoints, add ridge-regularized and nonlinear-probe ablations, compare shuffled-context or same-token baselines, and extend the pipeline to sparse autoencoder features. The sparse-feature version would be the most interpretable next step because it would turn the current whole-vector question into a feature-level question: which features are token-local, and which require context?
 
 \printbibliography
 \bibliographystyle{plainnat}
