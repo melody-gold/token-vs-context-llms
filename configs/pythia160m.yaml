@@ -1,0 +1,25 @@
+# Short alias for the report's larger-model comparison run.
+# Uses Pythia-160M on 50k Pile-10k token positions.
+model:
+  name: EleutherAI/pythia-160m
+  device: cpu
+  max_length: 128
+  layers: null
+
+dataset:
+  name: NeelNanda/pile-10k
+  subset: null
+  split: train
+  text_column: text
+  max_texts: 10000
+
+extraction:
+  batch_size: 2
+  max_tokens: 50000
+  output_path: artifacts/extractions/pythia_160m_pile10k_50k.npz
+
+probe:
+  ridge_alpha: 0.0
+  test_fraction: 0.2
+  random_seed: 0
+  output_path: results/generated/pythia_160m_pile10k_50k_metrics.json
