@@ -126,17 +126,45 @@ mode and then rerun the normal commands:
 uv sync --all-extras --dev --no-editable
 ```
 
+## Main Report Commands
+
+The report uses two model runs. Use these short Make targets from the repo root:
+
+```bash
+make run-70m      # extract, probe, summarize, plot, and diagnose Pythia-70M
+make run-160m     # extract, probe, summarize, plot, and diagnose Pythia-160M
+make final-report # compile docs/final_report.pdf and clean LaTeX temp files
+```
+
+If the extraction artifacts already exist and you only changed plotting or report
+text, regenerate just the summaries and figures:
+
+```bash
+make figures-70m
+make figures-160m
+```
+
+The short config names are:
+
+| Config | Model | Token budget | Purpose |
+|---|---|---:|---|
+| `configs/pythia70m.yaml` | `EleutherAI/pythia-70m` | 25,000 | smaller report model |
+| `configs/pythia160m.yaml` | `EleutherAI/pythia-160m` | 50,000 | larger comparison model |
+
+The older config names are still present for compatibility, but the short names
+above are the intended ones to use.
+
 ## Experiment Workflow
 
 1. Start with `configs/small_debug.yaml` to confirm the extraction and probe paths work locally.
-2. Use `configs/pythia_pile10k.yaml` for the fast report-scale baseline that
-   keeps artifacts manageable.
+2. Use `configs/pythia70m.yaml` for the fast report-scale baseline that keeps
+   artifacts manageable.
 3. Use one of the larger configs when you want stronger figures without
    overwriting the fast baseline:
    - `configs/pythia_pile10k_70m_100k.yaml`: same Pythia-70M model, larger
      100k-token sample.
-   - `configs/pythia_pile10k_160m.yaml`: larger Pythia-160M model, all layers,
-     50k tokens.
+   - `configs/pythia160m.yaml`: larger Pythia-160M model, all layers, 50k
+     tokens.
 4. Save the resulting layerwise metrics under `results/` and record the run in
    `docs/final_report/final_report.tex`.
 5. Once the hidden-state baseline is stable, extend the artifact format or add a
@@ -210,7 +238,7 @@ uv run --no-sync token-vs-context diagnose \
 Pythia-70M Pile-10k report run:
 
 ```bash
-CONFIG=configs/pythia_pile10k.yaml
+CONFIG=configs/pythia70m.yaml
 NAME=pythia_pile10k
 
 uv run --no-sync token-vs-context extract --config "$CONFIG"
@@ -223,7 +251,7 @@ uv run --no-sync token-vs-context diagnose \
 Pythia-70M Pile-10k tests plus diagnostics together:
 
 ```bash
-CONFIG=configs/pythia_pile10k.yaml
+CONFIG=configs/pythia70m.yaml
 NAME=pythia_pile10k
 
 uv run pytest && \
@@ -264,7 +292,7 @@ uv run --no-sync token-vs-context diagnose \
 Pythia-160M all-layer run:
 
 ```bash
-CONFIG=configs/pythia_pile10k_160m.yaml
+CONFIG=configs/pythia160m.yaml
 NAME=pythia_160m_pile10k_50k
 
 uv run --no-sync token-vs-context extract --config "$CONFIG"
@@ -277,7 +305,7 @@ uv run --no-sync token-vs-context diagnose \
 Pythia-160M tests plus diagnostics together:
 
 ```bash
-CONFIG=configs/pythia_pile10k_160m.yaml
+CONFIG=configs/pythia160m.yaml
 NAME=pythia_160m_pile10k_50k
 
 uv run pytest && \
@@ -291,7 +319,7 @@ uv run --no-sync token-vs-context diagnose \
 The full command pattern for any config is:
 
 ```bash
-CONFIG=configs/pythia_pile10k_160m.yaml
+CONFIG=configs/pythia160m.yaml
 NAME=pythia_160m_pile10k_50k
 
 uv run --no-sync token-vs-context extract --config "$CONFIG" && \
