@@ -151,6 +151,7 @@ def save_probe_diagnostics(output_dir: str | Path, diagnostics: ProbeDiagnostics
     )
     _write_summary_table(target / "diagnostic_summary.md", diagnostics.summary)
     _write_worst_token_table(target / "worst_tokens.md", diagnostics)
+    _write_heatmap_token_table(target / "heatmap_tokens.md", diagnostics)
 
 
 def _write_summary_table(path: Path, rows: list[dict[str, float | int]]) -> None:
@@ -210,6 +211,68 @@ def _write_worst_token_table(
                 + " |"
             )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_heatmap_token_table(path: Path, diagnostics: ProbeDiagnostics) -> None:
+    start, stop = _first_sequence_bounds(diagnostics.positions)
+    selected_positions = diagnostics.positions[start:stop]
+    selected_tokens = diagnostics.tokens[start:stop]
+    reason = _heatmap_selection_reason(diagnostics.positions, start, stop)
+    lines = [
+        "# Heatmap Token Selection",
+        "",
+        reason,
+        "",
+        f"Artifact row range: `{start}:{stop}`",
+        "",
+        "| Heatmap column | Artifact row | Token position | Token |",
+        "|---:|---:|---:|---|",
+    ]
+    selected_rows = zip(selected_positions, selected_tokens, strict=True)
+    for column, (position, token) in enumerate(selected_rows):
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(column),
+                    str(start + column),
+                    str(int(position)),
+                    _escape_markdown(str(token)),
+                ]
+            )
+            + " |"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _first_sequence_bounds(positions: np.ndarray) -> tuple[int, int]:
+    starts = np.flatnonzero(positions == 0)
+    if starts.size == 0:
+        return 0, min(len(positions), 32)
+    start = int(starts[0])
+    later_starts = starts[starts > start]
+    stop = int(later_starts[0]) if later_starts.size else min(len(positions), start + 32)
+    return start, max(start + 1, stop)
+
+
+def _heatmap_selection_reason(positions: np.ndarray, start: int, stop: int) -> str:
+    starts = np.flatnonzero(positions == 0)
+    if starts.size == 0:
+        return (
+            "The heatmap uses the first available artifact rows because no token "
+            "position reset was found to mark a sequence boundary."
+        )
+    if np.any(starts > start):
+        return (
+            "The heatmap uses the first complete extracted sequence: it starts at "
+            "the first token with position 0 and stops before the next position-0 "
+            "token, which marks the next sequence."
+        )
+    return (
+        "The heatmap uses the first extracted sequence, starting at the first token "
+        "with position 0. No later sequence boundary was found, so it is capped at "
+        f"{stop - start} tokens."
+    )
 
 
 def _format_float(value: float | int) -> str:

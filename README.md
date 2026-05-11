@@ -103,7 +103,10 @@ or experiment logs. The plot step writes a PNG figure with MSE, `R^2`, and mean
 cosine similarity by layer.
 The diagnose step writes optional exploratory figures and tables, including
 per-token cosine distributions, error by token position, probe-vs-baseline MSE,
-activation norm versus error, a token-layer heatmap, and a worst-token table.
+activation norm versus error, a token-layer heatmap, a heatmap-token selection
+table, and a worst-token table. The heatmap uses the first complete extracted
+sequence so its columns are a coherent contiguous context window; the companion
+`heatmap_tokens.md` file records the exact artifact rows and tokens shown.
 
 By default, `probe` fits the simple affine baseline with no ridge penalty. Use `--alpha`
 or `probe.ridge_alpha` only for later regularized ablations.
@@ -126,9 +129,186 @@ uv sync --all-extras --dev --no-editable
 ## Experiment Workflow
 
 1. Start with `configs/small_debug.yaml` to confirm the extraction and probe paths work locally.
-2. Copy `configs/experiment_template.yaml` and replace the model, dataset, and output paths for the main run.
-3. Save the resulting layerwise metrics under `results/` and record the run in `writeup/progress_report.md`.
-4. Once the hidden-state baseline is stable, extend the artifact format or add a parallel path for SAE features.
+2. Use `configs/pythia_pile10k.yaml` for the fast report-scale baseline that
+   keeps artifacts manageable.
+3. Use one of the larger configs when you want stronger figures without
+   overwriting the fast baseline:
+   - `configs/pythia_pile10k_70m_100k.yaml`: same Pythia-70M model, larger
+     100k-token sample.
+   - `configs/pythia_pile10k_160m.yaml`: larger Pythia-160M model, all layers,
+     50k tokens.
+4. Save the resulting layerwise metrics under `results/` and record the run in
+   `docs/final_report/final_report.tex`.
+5. Once the hidden-state baseline is stable, extend the artifact format or add a
+   parallel path for SAE features.
+
+## Tests and Diagnostic Plot Commands
+
+Run the unit tests by themselves:
+
+```bash
+uv run pytest
+```
+
+Diagnostics generate the exploratory plot set under `docs/final_report/figures/`.
+Run `extract` first if the artifact named in the config does not already exist.
+
+DistilGPT-2 smoke test:
+
+```bash
+CONFIG=configs/small_debug.yaml
+NAME=small_debug
+
+uv run --no-sync token-vs-context extract --config "$CONFIG"
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+DistilGPT-2 tests plus diagnostics together:
+
+```bash
+CONFIG=configs/small_debug.yaml
+NAME=small_debug
+
+uv run pytest && \
+uv run --no-sync token-vs-context extract --config "$CONFIG" && \
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+Pythia-70M debug run:
+
+```bash
+CONFIG=configs/pythia_debug.yaml
+NAME=pythia_debug
+
+uv run --no-sync token-vs-context extract --config "$CONFIG"
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+Pythia-70M debug tests plus diagnostics together:
+
+```bash
+CONFIG=configs/pythia_debug.yaml
+NAME=pythia_debug
+
+uv run pytest && \
+uv run --no-sync token-vs-context extract --config "$CONFIG" && \
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+Pythia-70M Pile-10k report run:
+
+```bash
+CONFIG=configs/pythia_pile10k.yaml
+NAME=pythia_pile10k
+
+uv run --no-sync token-vs-context extract --config "$CONFIG"
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+Pythia-70M Pile-10k tests plus diagnostics together:
+
+```bash
+CONFIG=configs/pythia_pile10k.yaml
+NAME=pythia_pile10k
+
+uv run pytest && \
+uv run --no-sync token-vs-context extract --config "$CONFIG" && \
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+Pythia-70M 100k-token run:
+
+```bash
+CONFIG=configs/pythia_pile10k_70m_100k.yaml
+NAME=pythia_70m_pile10k_100k
+
+uv run --no-sync token-vs-context extract --config "$CONFIG"
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+Pythia-70M 100k-token tests plus diagnostics together:
+
+```bash
+CONFIG=configs/pythia_pile10k_70m_100k.yaml
+NAME=pythia_70m_pile10k_100k
+
+uv run pytest && \
+uv run --no-sync token-vs-context extract --config "$CONFIG" && \
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+Pythia-160M all-layer run:
+
+```bash
+CONFIG=configs/pythia_pile10k_160m.yaml
+NAME=pythia_160m_pile10k_50k
+
+uv run --no-sync token-vs-context extract --config "$CONFIG"
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+Pythia-160M tests plus diagnostics together:
+
+```bash
+CONFIG=configs/pythia_pile10k_160m.yaml
+NAME=pythia_160m_pile10k_50k
+
+uv run pytest && \
+uv run --no-sync token-vs-context extract --config "$CONFIG" && \
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
+
+The full command pattern for any config is:
+
+```bash
+CONFIG=configs/pythia_pile10k_160m.yaml
+NAME=pythia_160m_pile10k_50k
+
+uv run --no-sync token-vs-context extract --config "$CONFIG" && \
+uv run --no-sync token-vs-context probe --config "$CONFIG" && \
+uv run --no-sync token-vs-context summarize \
+  --metrics "results/generated/${NAME}_metrics.json" \
+  --output "results/generated/${NAME}_summary.md" \
+  --title "$NAME Metrics" && \
+uv run --no-sync token-vs-context plot \
+  --metrics "results/generated/${NAME}_metrics.json" \
+  --output "docs/final_report/figures/${NAME}_metrics.png" \
+  --title "$NAME Metrics" && \
+uv run --no-sync token-vs-context diagnose \
+  --config "$CONFIG" \
+  --output-dir "docs/final_report/figures/${NAME}_diagnostics" \
+  --title "$NAME Diagnostics"
+```
 
 ## Probe Implementation Sketch
 

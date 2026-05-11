@@ -1,0 +1,25 @@
+# Larger token-budget run with the same small Pythia model.
+# This keeps the fast 25k-token run intact while improving sample size.
+model:
+  name: EleutherAI/pythia-70m
+  device: cpu
+  max_length: 128
+  layers: [0, 1, 2, 3, 4, 5]
+
+dataset:
+  name: NeelNanda/pile-10k
+  subset: null
+  split: train
+  text_column: text
+  max_texts: 10000
+
+extraction:
+  batch_size: 4
+  max_tokens: 100000
+  output_path: artifacts/extractions/pythia_70m_pile10k_100k.npz
+
+probe:
+  ridge_alpha: 0.0
+  test_fraction: 0.2
+  random_seed: 0
+  output_path: results/generated/pythia_70m_pile10k_100k_metrics.json

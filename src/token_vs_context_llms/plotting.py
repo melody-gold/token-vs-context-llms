@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,12 @@ LAYER_PALETTE = (
     "mediumvioletred",
     "darkturquoise",
     "goldenrod",
+    "springgreen",
+    "slateblue",
+    "tomato",
+    "slategray",
+    "crimson",
+    "yellowgreen",
 )
 
 
@@ -64,7 +71,7 @@ def write_layerwise_metrics_plot(
 
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.8), constrained_layout=True)
     fig.patch.set_facecolor("white")
-    fig.suptitle(title, fontsize=15, fontweight="semibold")
+    fig.suptitle(_paper_title(title), fontsize=15, fontweight="semibold")
 
     for axis, (metric_name, label, color) in zip(axes, METRIC_SPECS, strict=True):
         values = [_require_float(row, metric_name) for row in sorted_metrics]
@@ -148,27 +155,28 @@ def _write_cosine_boxplot(
 ) -> None:
     fig, axis = plt.subplots(figsize=(7.2, 4.2), constrained_layout=True)
     data = [diagnostics.heldout_cosine[index] for index in range(len(diagnostics.layer_indices))]
+    colors = _layer_colors(len(diagnostics.layer_indices))
     box = axis.boxplot(
         data,
         patch_artist=True,
         labels=[str(int(layer)) for layer in diagnostics.layer_indices],
         medianprops={"color": TEXT_COLOR, "linewidth": 1.4},
-        boxprops={"color": "cornflowerblue", "linewidth": 1.4},
+        boxprops={"linewidth": 1.4},
         whiskerprops={"color": SPINE_COLOR, "linewidth": 1.2},
         capprops={"color": SPINE_COLOR, "linewidth": 1.2},
         flierprops={
             "marker": ".",
             "markersize": 3,
-            "markeredgecolor": "cornflowerblue",
-            "markerfacecolor": "cornflowerblue",
+            "markeredgecolor": SPINE_COLOR,
+            "markerfacecolor": SPINE_COLOR,
         },
     )
-    for patch in box["boxes"]:
-        patch.set_facecolor("cornflowerblue")
-        patch.set_edgecolor("cornflowerblue")
+    for patch, color in zip(box["boxes"], colors, strict=True):
+        patch.set_facecolor(color)
+        patch.set_edgecolor(color)
         patch.set_alpha(0.45)
     _finish_axis(axis, "Layer", "Held-out per-token cosine")
-    axis.set_title(f"{title_prefix}: cosine distribution by layer")
+    axis.set_title(_paper_title(title_prefix, "Held-Out Cosine Similarity by Layer"))
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
@@ -179,25 +187,29 @@ def _write_error_by_position(
     plt: Any,
     title_prefix: str,
 ) -> None:
-    fig, axis = plt.subplots(figsize=(8.2, 4.4), constrained_layout=True)
+    fig, axis = plt.subplots(figsize=(9.2, 4.8), constrained_layout=True)
     test_positions = diagnostics.positions[diagnostics.test_indices]
-    colors = _layer_colors(len(diagnostics.layer_indices))
+    positions, mean_mse = _mean_matrix_by_position(test_positions, diagnostics.heldout_mse)
+    positive_values = mean_mse[mean_mse > 0]
+    epsilon = float(np.min(positive_values)) * 0.5 if positive_values.size else 1e-12
+    log_mse = np.log10(mean_mse + epsilon)
 
-    for local_layer, layer_index in enumerate(diagnostics.layer_indices):
-        positions, means = _mean_by_position(test_positions, diagnostics.heldout_mse[local_layer])
-        axis.plot(
-            positions,
-            means,
-            color=colors[local_layer],
-            linewidth=1.8,
-            marker="o",
-            markersize=3,
-            label=f"Layer {int(layer_index)}",
-        )
+    image = axis.imshow(log_mse, aspect="auto", cmap=CONTINUOUS_CMAP, origin="lower")
+    axis.set_title(_paper_title(title_prefix, "Mean Reconstruction Error by Token Position"))
+    axis.set_xlabel("Token position")
+    axis.set_ylabel("Layer")
+    axis.set_yticks(np.arange(len(diagnostics.layer_indices)))
+    axis.set_yticklabels([str(int(layer)) for layer in diagnostics.layer_indices])
 
-    _finish_axis(axis, "Token position", "Held-out MSE")
-    axis.set_title(f"{title_prefix}: error by token position")
-    axis.legend(frameon=False, ncol=2, fontsize=8)
+    tick_indices = _token_tick_indices(len(positions), max_ticks=16)
+    axis.set_xticks(tick_indices)
+    axis.set_xticklabels([str(int(positions[index])) for index in tick_indices])
+    axis.set_axisbelow(True)
+    axis.spines["top"].set_visible(False)
+    axis.spines["right"].set_visible(False)
+    axis.spines["left"].set_color(SPINE_COLOR)
+    axis.spines["bottom"].set_color(SPINE_COLOR)
+    fig.colorbar(image, ax=axis, label=r"Mean held-out MSE ($\log_{10}$)")
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
@@ -223,7 +235,7 @@ def _write_baseline_comparison(
         label="Mean baseline",
     )
     _finish_axis(axis, "Layer", "Held-out MSE")
-    axis.set_title(f"{title_prefix}: probe vs mean baseline")
+    axis.set_title(_paper_title(title_prefix, "Probe Error vs. Mean Baseline"))
     axis.set_xticks(layers)
     axis.legend(frameon=False)
     fig.savefig(path, dpi=200)
@@ -256,7 +268,7 @@ def _write_norm_vs_error(
         )
 
     _finish_axis(axis, "Target activation norm", "Held-out MSE")
-    axis.set_title(f"{title_prefix}: activation norm vs error")
+    axis.set_title(_paper_title(title_prefix, "Activation Norm vs. Reconstruction Error"))
     axis.legend(frameon=False, ncol=2, fontsize=8)
     fig.savefig(path, dpi=200)
     plt.close(fig)
@@ -271,11 +283,12 @@ def _write_sequence_heatmap(
     start, stop = _first_sequence_bounds(diagnostics.positions)
     sequence_scores = diagnostics.all_cosine[:, start:stop]
     tokens = diagnostics.tokens[start:stop]
+    selection_note = _heatmap_selection_note(diagnostics.positions, start, stop)
 
-    fig, axis = plt.subplots(figsize=(9.5, 4.2), constrained_layout=True)
+    fig, axis = plt.subplots(figsize=(9.5, 4.8), constrained_layout=True)
     image = axis.imshow(sequence_scores, aspect="auto", cmap=CONTINUOUS_CMAP, vmin=-1.0, vmax=1.0)
-    axis.set_title(f"{title_prefix}: token-layer cosine heatmap")
-    axis.set_xlabel("Token in one sequence")
+    axis.set_title(_paper_title(title_prefix, "Token-Level Cosine Similarity Across Layers"))
+    axis.set_xlabel(f"Token in selected sequence (artifact rows {start}:{stop})")
     axis.set_ylabel("Layer")
     axis.set_yticks(np.arange(len(diagnostics.layer_indices)))
     axis.set_yticklabels([str(int(layer)) for layer in diagnostics.layer_indices])
@@ -286,6 +299,17 @@ def _write_sequence_heatmap(
         [_short_token(tokens[index]) for index in tick_indices],
         rotation=60,
         ha="right",
+    )
+    axis.text(
+        0.0,
+        -0.34,
+        selection_note,
+        transform=axis.transAxes,
+        ha="left",
+        va="top",
+        fontsize=8,
+        color=TEXT_COLOR,
+        wrap=True,
     )
     fig.colorbar(image, ax=axis, label="Cosine similarity")
     fig.savefig(path, dpi=200)
@@ -303,9 +327,14 @@ def _finish_axis(axis: Any, xlabel: str, ylabel: str) -> None:
     axis.spines["bottom"].set_color(SPINE_COLOR)
 
 
-def _mean_by_position(positions: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def _mean_matrix_by_position(
+    positions: np.ndarray,
+    values: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
     unique_positions = np.asarray(sorted(set(int(position) for position in positions)))
-    means = np.asarray([np.mean(values[positions == position]) for position in unique_positions])
+    means = np.zeros((values.shape[0], unique_positions.size), dtype=float)
+    for column, position in enumerate(unique_positions):
+        means[:, column] = np.mean(values[:, positions == position], axis=1)
     return unique_positions, means
 
 
@@ -323,6 +352,21 @@ def _first_sequence_bounds(positions: np.ndarray) -> tuple[int, int]:
     return start, max(start + 1, stop)
 
 
+def _heatmap_selection_note(positions: np.ndarray, start: int, stop: int) -> str:
+    starts = np.flatnonzero(positions == 0)
+    if starts.size == 0:
+        return "Selection: first available artifact rows; no position reset was found."
+    if np.any(starts > start):
+        return (
+            "Selection: first complete extracted sequence, from the first position-0 "
+            "token through the token before the next position-0 boundary."
+        )
+    return (
+        "Selection: first extracted sequence from the first position-0 token; no later "
+        f"boundary was found, so the view is capped at {stop - start} tokens."
+    )
+
+
 def _token_tick_indices(num_tokens: int, max_ticks: int) -> np.ndarray:
     if num_tokens <= max_ticks:
         return np.arange(num_tokens)
@@ -334,3 +378,47 @@ def _short_token(token: str, max_length: int = 12) -> str:
     if len(cleaned) <= max_length:
         return cleaned
     return cleaned[: max_length - 1] + "…"
+
+
+def _paper_title(prefix: str, topic: str | None = None) -> str:
+    formatted_prefix = _format_title_prefix(prefix)
+    if topic is None:
+        return formatted_prefix
+    if not formatted_prefix:
+        return topic
+    return f"{formatted_prefix}: {topic}"
+
+
+def _format_title_prefix(prefix: str) -> str:
+    cleaned = prefix.strip().replace("_", " ")
+    cleaned = re.sub(r"\b(Diagnostics|Metrics)\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" :-")
+    if not cleaned:
+        return ""
+
+    words = []
+    for word in cleaned.split():
+        lower = word.lower()
+        if lower == "pythia":
+            words.append("Pythia")
+        elif lower == "distilgpt2":
+            words.append("DistilGPT-2")
+        elif lower == "pile10k":
+            words.append("Pile-10k")
+        elif re.fullmatch(r"\d+m", lower):
+            words.append(lower.upper())
+        elif re.fullmatch(r"\d+k", lower):
+            words.append(lower)
+        else:
+            words.append(word.capitalize())
+
+    if "Pythia" in words and len(words) >= 2 and re.fullmatch(r"\d+M", words[1]):
+        words = [f"Pythia-{words[1]}", *words[2:]]
+
+    if len(words) >= 2 and re.fullmatch(r"\d+k", words[-1]) and words[-2] == "Pile-10k":
+        token_count = words.pop()
+        words[-1] = f"{words[-1]} ({token_count} tokens)"
+
+    if any(word.startswith("Pythia") or word.startswith("DistilGPT") for word in words):
+        return ", ".join(words)
+    return " ".join(words)

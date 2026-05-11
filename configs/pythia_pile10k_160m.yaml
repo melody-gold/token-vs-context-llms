@@ -1,0 +1,25 @@
+# Deeper hidden-state baseline with a larger Pythia model.
+# `layers: null` extracts all transformer block outputs for the model.
+model:
+  name: EleutherAI/pythia-160m
+  device: cpu
+  max_length: 128
+  layers: null
+
+dataset:
+  name: NeelNanda/pile-10k
+  subset: null
+  split: train
+  text_column: text
+  max_texts: 10000
+
+extraction:
+  batch_size: 2
+  max_tokens: 50000
+  output_path: artifacts/extractions/pythia_160m_pile10k_50k.npz
+
+probe:
+  ridge_alpha: 0.0
+  test_fraction: 0.2
+  random_seed: 0
+  output_path: results/generated/pythia_160m_pile10k_50k_metrics.json
