@@ -99,24 +99,109 @@ $R^2$, and cosine similarity.
 
 
 \section{Results}
-% Replace Debug Results with real run if possible.
-% Include plot + table + interpretation.
 
+\subsection{Pythia-70M}
 
-\section{Debug Results}
-
-Figure~\ref{fig:pythia-debug-metrics} shows the current debug run using
-Pythia-70M on a small WikiText slice. This run is mainly a pipeline validation:
-it confirms that extraction, probing, summary generation, and plotting work
-end-to-end. The final report should replace or supplement this figure with the
-larger Pile-10k run once that extraction has completed.
+Figure~\ref{fig:pythia-70m-metrics} shows the Pythia-70M layerwise results averaged across 10 train/test splits, with the shaded region showing one standard deviation. The first two layers are the most token-predictable: in the seed-0 split reported in Table~\ref{tab:pythia-70m}, $R^2$ is 0.70 at layer 0 and 0.47 at layer 1, with mean cosine similarities of 0.89 and 0.81. By layer 2, $R^2$ drops to 0.16 and remains low through the final block. This is the main evidence that the representation becomes much less linearly recoverable from token identity after the earliest transformer layers.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{pythia_debug_metrics.png}
-    \caption{Layerwise token-only probe metrics for the Pythia debug run.}
-    \label{fig:pythia-debug-metrics}
+    \includegraphics[width=\textwidth]{pythia_pile10k_metrics.png}
+    \caption{Layerwise token-only probe metrics for Pythia-70M on 25,000 Pile-10k token positions. Lines show the mean across 10 train/test splits, and shaded regions show one standard deviation.}
+    \label{fig:pythia-70m-metrics}
 \end{figure}
+
+\begin{table}[t]
+\centering
+\begin{tabular}{r r r r}
+\toprule
+Layer & MSE & $R^2$ & Mean cosine \\
+\midrule
+0 & 0.021 & 0.699 & 0.891 \\
+1 & 0.064 & 0.467 & 0.808 \\
+2 & 0.676 & 0.156 & 0.689 \\
+3 & 0.675 & 0.160 & 0.709 \\
+4 & 0.383 & 0.195 & 0.688 \\
+5 & 6.065 & 0.170 & 0.992 \\
+\bottomrule
+\end{tabular}
+\caption{Held-out Pythia-70M probe metrics for seed-0 split. The split contains 20,000/5,000 train/test token positions.}
+\label{tab:pythia-70m}
+\end{table}
+
+Figure~\ref{fig:pythia-70m-lens-examples} gives a qualitative view of how the probe output behaves on individual examples. These examples are not used as the main evidence, but they help show why the layerwise metrics should be read as an aggregate pattern rather than as a guarantee that every token behaves similarly. In particular, the example-level view shows that token-only reconstruction can look reasonable for some held-out tokens even after the aggregate $R^2$ has fallen, which is why the per-layer averages and qualitative examples are useful together.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{pythia_pile10k_diagnostics/lens_prediction_examples.png}
+    \caption{Pythia-70M qualitative prediction examples from the diagnostic pipeline. The examples compare true and reconstructed hidden-state behavior for selected held-out tokens.}
+    \label{fig:pythia-70m-lens-examples}
+\end{figure}
+
+The final layer requires special interpretation. Its MSE is much larger than the earlier layers, but cosine similarity rises to 0.99. The diagnostic summary shows that the mean hidden-state norm at layer 5 is about 440, compared with about 7--16 in earlier layers. This suggests that the high cosine is mostly measuring directional alignment in a very large-norm representation, not close coordinate-level reconstruction. Supporting diagnostic figures for this point are included in Appendix~\ref{app:diagnostic-figures}.
+
+\subsection{Pythia-160M}
+
+The larger model gives a cleaner view because it has 12 layers. As shown in Figure~\ref{fig:pythia-160m-metrics}, token-only predictability is high at the first layer, declines at layers 1 and 2, and then enters a long middle region where the probe explains very little variance. $R^2$ falls from 0.76 at layer 0 to 0.52 at layer 1, 0.26 at layer 2, and roughly 0.10--0.13 through layers 3--9. This pattern is consistent with contextual mixing becoming dominant early in the network.
+
+The larger model gives a cleaner view because it has 12 layers. Figure~\ref{fig:pythia-160m-metrics} shows the Pythia-160M layerwise results averaged across 10 train/test splits, with the shaded region showing one standard deviation. Token-only predictability is high at the first layer, declines at layers 1 and 2, and then enters a long middle region where the probe explains very little variance. In the seed-0 split reported in Table~\ref{tab:pythia-160m}, $R^2$ falls from 0.76 at layer 0 to 0.52 at layer 1, 0.26 at layer 2, and roughly 0.10--0.13 through layers 3--9. This pattern is consistent with contextual mixing becoming dominant early in the network.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{pythia_160m_pile10k_50k_metrics.png}
+    \caption{Layerwise token-only probe metrics for Pythia-160M on 50,000 Pile-10k token positions. Lines show the mean across 10 train/test splits, and shaded regions show one standard deviation.}
+    \label{fig:pythia-160m-metrics}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{r r r r}
+\toprule
+Layer & MSE & $R^2$ & Mean cosine \\
+\midrule
+0 & 0.021 & 0.759 & 0.908 \\
+1 & 0.067 & 0.519 & 0.851 \\
+2 & 0.266 & 0.263 & 0.769 \\
+3 & 1.715 & 0.112 & 0.623 \\
+4 & 1.802 & 0.108 & 0.654 \\
+5 & 1.846 & 0.106 & 0.686 \\
+6 & 1.872 & 0.103 & 0.696 \\
+7 & 1.914 & 0.110 & 0.750 \\
+8 & 1.868 & 0.116 & 0.681 \\
+9 & 1.519 & 0.125 & 0.650 \\
+10 & 0.909 & 0.177 & 0.672 \\
+11 & 2.578 & 0.163 & 0.986 \\
+\bottomrule
+\end{tabular}
+\caption{Held-out Pythia-160M probe metrics for the seed-0 split. The split contains 40,000/10,000 train/test token positions.}
+\label{tab:pythia-160m}
+\end{table}
+
+The same qualitative diagnostic for Pythia-160M appears in Figure~\ref{fig:pythia-160m-lens-examples}. Together with the main 160M metric curve in Figure~\ref{fig:pythia-160m-metrics}, these examples make the result more concrete: early layers remain comparatively token-predictable, while middle-layer behavior varies more across held-out tokens.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{pythia_160m_pile10k_50k_diagnostics/lens_prediction_examples.png}
+    \caption{Pythia-160M qualitative prediction examples from the diagnostic pipeline. These examples supplement the aggregate layerwise metrics by showing selected held-out token reconstructions.}
+    \label{fig:pythia-160m-lens-examples}
+\end{figure}
+
+The Pythia-160M diagnostics also show that the probe consistently beats a constant mean baseline, but the margin becomes small in the middle layers. For example, layer 6 has probe MSE 1.87 versus mean-baseline MSE 2.09, and layer 8 has probe MSE 1.87 versus baseline MSE 2.11. Thus the token embedding still contains some useful information, but most of the held-out hidden-state variance is not captured by the token-only affine map. The full set of diagnostic plots is included in Appendix~\ref{app:diagnostic-figures}.
+
+\subsection{Comparison Across Models}
+
+Figure~\ref{fig:pythia-r2-model-comparison} puts the two $R^2$ curves on a common relative-depth axis. Unlike Figures~\ref{fig:pythia-70m-metrics} and~\ref{fig:pythia-160m-metrics}, this comparison plot is shown as a direct model-to-model comparison rather than as a 10-split average with shaded uncertainty. This makes the shared trend easier to see despite the different number of layers in the two models.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{pythia_r2_model_comparison.png}
+    \caption{Side-by-side comparison of token-only probe $R^2$ across relative depth for Pythia-70M and Pythia-160M. Both models show high recoverability in the earliest layers followed by a sharp drop, indicating that token identity alone explains much less of the middle-layer hidden-state variance.}
+    \label{fig:pythia-r2-model-comparison}
+\end{figure}
+
+Both models show the same broad structure. The earliest hidden states are strongly predicted by token identity, and predictability falls sharply after the first few transformer blocks. The 160M model makes this transition easier to see: the drop is gradual from layers 0 to 2 and then nearly flat at low $R^2$ across the middle of the model. The 70M run has fewer layers, but it still shows the same decline by layer 2.
+
+The most important caution is that the final-layer cosine spike appears in both models. In the 70M model, the final layer has the largest MSE but the highest cosine. In the 160M model, layer 11 behaves similarly, with MSE 2.58, $R^2$ 0.16, mean cosine 0.99, and mean norm about 270. This makes the final-layer result a metric interaction rather than a simple success case. Direction is preserved well, but magnitude and coordinate-level reconstruction remain poor.
 
 \section{Discussion}
 % What results mean, limitations, what went right/wrong.
