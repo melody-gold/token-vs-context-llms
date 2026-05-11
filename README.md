@@ -103,10 +103,10 @@ or experiment logs. The plot step writes a PNG figure with MSE, `R^2`, and mean
 cosine similarity by layer.
 The diagnose step writes optional exploratory figures and tables, including
 per-token cosine distributions, error by token position, probe-vs-baseline MSE,
-activation norm versus error, a token-layer heatmap, a heatmap-token selection
-table, and a worst-token table. The heatmap uses the first complete extracted
-sequence so its columns are a coherent contiguous context window; the companion
-`heatmap_tokens.md` file records the exact artifact rows and tokens shown.
+activation norm versus error, sampled probe predictions versus target activation
+values, a layer-by-position cosine heatmap, and a worst-token table. The
+heatmaps aggregate held-out tokens by token position, so they summarize the test
+split rather than one selected sequence.
 
 By default, `probe` fits the simple affine baseline with no ridge penalty. Use `--alpha`
 or `probe.ridge_alpha` only for later regularized ablations.

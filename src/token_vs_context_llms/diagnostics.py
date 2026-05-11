@@ -24,6 +24,10 @@ class ProbeDiagnostics:
     heldout_baseline_mse: np.ndarray
     all_cosine: np.ndarray
     all_mse: np.ndarray
+    lens_example_token_offsets: np.ndarray
+    lens_example_dimensions: np.ndarray
+    lens_example_targets: np.ndarray
+    lens_example_predictions: np.ndarray
     summary: list[dict[str, float | int]]
 
 
@@ -41,7 +45,7 @@ def compute_probe_diagnostics(
     if hidden_states.ndim != 3:
         raise ValueError("hidden_states must have shape [num_tokens, num_layers, hidden_size].")
 
-    num_tokens, num_layers, _ = hidden_states.shape
+    num_tokens, num_layers, hidden_size = hidden_states.shape
     if token_embeddings.shape[0] != num_tokens:
         raise ValueError("token_embeddings and hidden_states must have the same token count.")
 
@@ -58,6 +62,14 @@ def compute_probe_diagnostics(
     all_cosine = np.zeros((num_layers, num_tokens), dtype=np.float64)
     all_mse = np.zeros_like(all_cosine)
     summary: list[dict[str, float | int]] = []
+    rng = np.random.default_rng(random_seed)
+    example_token_offsets = _sample_indices(test_indices.size, max_size=128, rng=rng)
+    example_dimensions = _sample_indices(hidden_size, max_size=32, rng=rng)
+    lens_example_targets = np.zeros(
+        (num_layers, example_token_offsets.size, example_dimensions.size),
+        dtype=np.float64,
+    )
+    lens_example_predictions = np.zeros_like(lens_example_targets)
 
     x_train = token_embeddings[train_indices]
     x_test = token_embeddings[test_indices]
@@ -80,6 +92,12 @@ def compute_probe_diagnostics(
         heldout_baseline_mse[local_layer] = row_mean_squared_error(y_test, baseline_test)
         all_cosine[local_layer] = row_cosine_similarity(targets, pred_all)
         all_mse[local_layer] = row_mean_squared_error(targets, pred_all)
+        lens_example_targets[local_layer] = y_test[
+            np.ix_(example_token_offsets, example_dimensions)
+        ]
+        lens_example_predictions[local_layer] = pred_test[
+            np.ix_(example_token_offsets, example_dimensions)
+        ]
 
         mean_probe_mse = float(np.mean(heldout_mse[local_layer]))
         mean_baseline_mse = float(np.mean(heldout_baseline_mse[local_layer]))
@@ -110,6 +128,10 @@ def compute_probe_diagnostics(
         heldout_baseline_mse=heldout_baseline_mse,
         all_cosine=all_cosine,
         all_mse=all_mse,
+        lens_example_token_offsets=example_token_offsets,
+        lens_example_dimensions=example_dimensions,
+        lens_example_targets=lens_example_targets,
+        lens_example_predictions=lens_example_predictions,
         summary=summary,
     )
 
@@ -130,6 +152,13 @@ def row_cosine_similarity(y_true: np.ndarray, y_pred: np.ndarray) -> np.ndarray:
     return numerator / np.clip(denominator, a_min=1e-12, a_max=None)
 
 
+def _sample_indices(size: int, max_size: int, rng: np.random.Generator) -> np.ndarray:
+    sample_size = min(size, max_size)
+    if sample_size == size:
+        return np.arange(size)
+    return np.sort(rng.choice(size, size=sample_size, replace=False))
+
+
 def save_probe_diagnostics(output_dir: str | Path, diagnostics: ProbeDiagnostics) -> None:
     """Save diagnostic arrays and a compact summary table."""
 
@@ -148,10 +177,13 @@ def save_probe_diagnostics(output_dir: str | Path, diagnostics: ProbeDiagnostics
         heldout_baseline_mse=diagnostics.heldout_baseline_mse,
         all_cosine=diagnostics.all_cosine,
         all_mse=diagnostics.all_mse,
+        lens_example_token_offsets=diagnostics.lens_example_token_offsets,
+        lens_example_dimensions=diagnostics.lens_example_dimensions,
+        lens_example_targets=diagnostics.lens_example_targets,
+        lens_example_predictions=diagnostics.lens_example_predictions,
     )
     _write_summary_table(target / "diagnostic_summary.md", diagnostics.summary)
     _write_worst_token_table(target / "worst_tokens.md", diagnostics)
-    _write_heatmap_token_table(target / "heatmap_tokens.md", diagnostics)
 
 
 def _write_summary_table(path: Path, rows: list[dict[str, float | int]]) -> None:
@@ -211,68 +243,6 @@ def _write_worst_token_table(
                 + " |"
             )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def _write_heatmap_token_table(path: Path, diagnostics: ProbeDiagnostics) -> None:
-    start, stop = _first_sequence_bounds(diagnostics.positions)
-    selected_positions = diagnostics.positions[start:stop]
-    selected_tokens = diagnostics.tokens[start:stop]
-    reason = _heatmap_selection_reason(diagnostics.positions, start, stop)
-    lines = [
-        "# Heatmap Token Selection",
-        "",
-        reason,
-        "",
-        f"Artifact row range: `{start}:{stop}`",
-        "",
-        "| Heatmap column | Artifact row | Token position | Token |",
-        "|---:|---:|---:|---|",
-    ]
-    selected_rows = zip(selected_positions, selected_tokens, strict=True)
-    for column, (position, token) in enumerate(selected_rows):
-        lines.append(
-            "| "
-            + " | ".join(
-                [
-                    str(column),
-                    str(start + column),
-                    str(int(position)),
-                    _escape_markdown(str(token)),
-                ]
-            )
-            + " |"
-        )
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def _first_sequence_bounds(positions: np.ndarray) -> tuple[int, int]:
-    starts = np.flatnonzero(positions == 0)
-    if starts.size == 0:
-        return 0, min(len(positions), 32)
-    start = int(starts[0])
-    later_starts = starts[starts > start]
-    stop = int(later_starts[0]) if later_starts.size else min(len(positions), start + 32)
-    return start, max(start + 1, stop)
-
-
-def _heatmap_selection_reason(positions: np.ndarray, start: int, stop: int) -> str:
-    starts = np.flatnonzero(positions == 0)
-    if starts.size == 0:
-        return (
-            "The heatmap uses the first available artifact rows because no token "
-            "position reset was found to mark a sequence boundary."
-        )
-    if np.any(starts > start):
-        return (
-            "The heatmap uses the first complete extracted sequence: it starts at "
-            "the first token with position 0 and stops before the next position-0 "
-            "token, which marks the next sequence."
-        )
-    return (
-        "The heatmap uses the first extracted sequence, starting at the first token "
-        "with position 0. No later sequence boundary was found, so it is capped at "
-        f"{stop - start} tokens."
-    )
 
 
 def _format_float(value: float | int) -> str:

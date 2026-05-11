@@ -120,7 +120,18 @@ def write_diagnostic_plots(
     _write_error_by_position(target / "mse_by_position.png", diagnostics, plt, title_prefix)
     _write_baseline_comparison(target / "baseline_comparison.png", diagnostics, plt, title_prefix)
     _write_norm_vs_error(target / "norm_vs_error.png", diagnostics, plt, title_prefix)
-    _write_sequence_heatmap(target / "token_layer_heatmap.png", diagnostics, plt, title_prefix)
+    _write_lens_prediction_examples(
+        target / "lens_prediction_examples.png",
+        diagnostics,
+        plt,
+        title_prefix,
+    )
+    _write_cosine_by_position_heatmap(
+        target / "token_layer_heatmap.png",
+        diagnostics,
+        plt,
+        title_prefix,
+    )
 
 
 def _require_float(row: dict[str, Any], metric_name: str) -> float:
@@ -274,44 +285,87 @@ def _write_norm_vs_error(
     plt.close(fig)
 
 
-def _write_sequence_heatmap(
+def _write_lens_prediction_examples(
     path: Path,
     diagnostics: ProbeDiagnostics,
     plt: Any,
     title_prefix: str,
 ) -> None:
-    start, stop = _first_sequence_bounds(diagnostics.positions)
-    sequence_scores = diagnostics.all_cosine[:, start:stop]
-    tokens = diagnostics.tokens[start:stop]
-    selection_note = _heatmap_selection_note(diagnostics.positions, start, stop)
+    layer_positions = _representative_layer_positions(len(diagnostics.layer_indices))
+    fig, axes = plt.subplots(
+        1,
+        len(layer_positions),
+        figsize=(4.2 * len(layer_positions), 4.1),
+        constrained_layout=True,
+        squeeze=False,
+    )
+    targets = diagnostics.lens_example_targets[layer_positions].ravel()
+    predictions = diagnostics.lens_example_predictions[layer_positions].ravel()
+    lower = float(min(np.min(targets), np.min(predictions)))
+    upper = float(max(np.max(targets), np.max(predictions)))
+    margin = (upper - lower) * 0.04 or 1.0
+    limits = (lower - margin, upper + margin)
 
-    fig, axis = plt.subplots(figsize=(9.5, 4.8), constrained_layout=True)
-    image = axis.imshow(sequence_scores, aspect="auto", cmap=CONTINUOUS_CMAP, vmin=-1.0, vmax=1.0)
-    axis.set_title(_paper_title(title_prefix, "Token-Level Cosine Similarity Across Layers"))
-    axis.set_xlabel(f"Token in selected sequence (artifact rows {start}:{stop})")
+    for axis, local_layer in zip(axes.ravel(), layer_positions, strict=True):
+        layer_targets = diagnostics.lens_example_targets[local_layer].ravel()
+        layer_predictions = diagnostics.lens_example_predictions[local_layer].ravel()
+        correlation = np.corrcoef(layer_targets, layer_predictions)[0, 1]
+        axis.scatter(
+            layer_targets,
+            layer_predictions,
+            color="cornflowerblue",
+            s=10,
+            alpha=0.35,
+            edgecolors="none",
+        )
+        axis.plot(limits, limits, color=SPINE_COLOR, linewidth=1.2, linestyle="--")
+        _finish_axis(axis, "Actual activation value", "Predicted activation value")
+        axis.set_xlim(limits)
+        axis.set_ylim(limits)
+        axis.set_aspect("equal", adjustable="box")
+        axis.set_title(
+            f"Layer {int(diagnostics.layer_indices[local_layer])} (r = {correlation:.2f})",
+            fontsize=10,
+        )
+
+    fig.suptitle(_paper_title(title_prefix, "Probe Predictions vs. Target Activations"))
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+
+
+def _write_cosine_by_position_heatmap(
+    path: Path,
+    diagnostics: ProbeDiagnostics,
+    plt: Any,
+    title_prefix: str,
+) -> None:
+    test_positions = diagnostics.positions[diagnostics.test_indices]
+    positions, mean_cosine = _mean_matrix_by_position(test_positions, diagnostics.heldout_cosine)
+
+    fig, axis = plt.subplots(figsize=(9.2, 4.8), constrained_layout=True)
+    image = axis.imshow(
+        mean_cosine,
+        aspect="auto",
+        cmap=CONTINUOUS_CMAP,
+        origin="lower",
+        vmin=0.0,
+        vmax=1.0,
+    )
+    axis.set_title(_paper_title(title_prefix, "Mean Cosine Similarity by Token Position"))
+    axis.set_xlabel("Token position")
     axis.set_ylabel("Layer")
     axis.set_yticks(np.arange(len(diagnostics.layer_indices)))
     axis.set_yticklabels([str(int(layer)) for layer in diagnostics.layer_indices])
 
-    tick_indices = _token_tick_indices(len(tokens), max_ticks=18)
+    tick_indices = _token_tick_indices(len(positions), max_ticks=16)
     axis.set_xticks(tick_indices)
-    axis.set_xticklabels(
-        [_short_token(tokens[index]) for index in tick_indices],
-        rotation=60,
-        ha="right",
-    )
-    axis.text(
-        0.0,
-        -0.34,
-        selection_note,
-        transform=axis.transAxes,
-        ha="left",
-        va="top",
-        fontsize=8,
-        color=TEXT_COLOR,
-        wrap=True,
-    )
-    fig.colorbar(image, ax=axis, label="Cosine similarity")
+    axis.set_xticklabels([str(int(positions[index])) for index in tick_indices])
+    axis.set_axisbelow(True)
+    axis.spines["top"].set_visible(False)
+    axis.spines["right"].set_visible(False)
+    axis.spines["left"].set_color(SPINE_COLOR)
+    axis.spines["bottom"].set_color(SPINE_COLOR)
+    fig.colorbar(image, ax=axis, label="Mean held-out cosine similarity")
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
@@ -342,42 +396,16 @@ def _layer_colors(num_layers: int) -> list[str]:
     return [LAYER_PALETTE[index % len(LAYER_PALETTE)] for index in range(num_layers)]
 
 
-def _first_sequence_bounds(positions: np.ndarray) -> tuple[int, int]:
-    starts = np.flatnonzero(positions == 0)
-    if starts.size == 0:
-        return 0, min(len(positions), 32)
-    start = int(starts[0])
-    later_starts = starts[starts > start]
-    stop = int(later_starts[0]) if later_starts.size else min(len(positions), start + 32)
-    return start, max(start + 1, stop)
-
-
-def _heatmap_selection_note(positions: np.ndarray, start: int, stop: int) -> str:
-    starts = np.flatnonzero(positions == 0)
-    if starts.size == 0:
-        return "Selection: first available artifact rows; no position reset was found."
-    if np.any(starts > start):
-        return (
-            "Selection: first complete extracted sequence, from the first position-0 "
-            "token through the token before the next position-0 boundary."
-        )
-    return (
-        "Selection: first extracted sequence from the first position-0 token; no later "
-        f"boundary was found, so the view is capped at {stop - start} tokens."
-    )
+def _representative_layer_positions(num_layers: int) -> list[int]:
+    if num_layers <= 3:
+        return list(range(num_layers))
+    return sorted({0, num_layers // 2, num_layers - 1})
 
 
 def _token_tick_indices(num_tokens: int, max_ticks: int) -> np.ndarray:
     if num_tokens <= max_ticks:
         return np.arange(num_tokens)
     return np.unique(np.linspace(0, num_tokens - 1, max_ticks, dtype=int))
-
-
-def _short_token(token: str, max_length: int = 12) -> str:
-    cleaned = token.replace("Ġ", " ").replace("Ċ", "\\n")
-    if len(cleaned) <= max_length:
-        return cleaned
-    return cleaned[: max_length - 1] + "…"
 
 
 def _paper_title(prefix: str, topic: str | None = None) -> str:
