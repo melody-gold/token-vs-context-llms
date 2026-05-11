@@ -55,120 +55,36 @@
 \begin{document}
 
 \maketitle
-\thispagestyle{fancy}
 
 \begin{abstract}
-...
+Transformer hidden states combine information from the current token and from the preceding context. This project measures how that balance changes across layers by asking the following question: how well can a layer's hidden state be predicted from the token's embedding alone? Using a token-only reconstruction probe, for each held-out token, an affine map is trained to predict a layer's hidden state from the token's input embedding alone. I apply this method to EleutherAI Pythia-70M and Pythia-160M on samples from NeelNanda Pile-10k. In both models, the first layer is strongly recoverable from token identity, while middle layers become much less predictable. The Pythia-160M run shows a clear early drop from $R^2=0.76$ at layer 0 to about $0.11$ across layers 3--8, suggesting that most token-only linear structure is lost early in the network. The final layer in both models has unusually high cosine similarity despite large mean squared error, which appears to be a scale effect rather than evidence of complete reconstruction. Overall, the results support the hypothesis that context-dependent information becomes dominant after the earliest transformer blocks, while also showing the importance of reporting multiple metrics when probing hidden representations.
 \end{abstract}
 
 \section{Introduction}
 
-Large language models represent each token using both its identity and the
-sequence of tokens that came before it. At the input layer, a token is represented
-by an embedding lookup that depends only on the token id. After the model applies
-attention and feed-forward blocks, however, the hidden state at that same token
-position can contain information from earlier positions in the context. This
-project studies where that transition becomes visible: how much of a transformer's
-intermediate representation can be predicted from the current token alone, and how
-much appears to require prior context?
+Large language models (LLMs) represent each token using both the token itself and the tokens that came before it. At the input layer, the model starts with an embedding lookup that depends only on the token id. After attention and feed-forward blocks, though, the hidden state at that same token position can include information from earlier words in the sequence. This project studies where that change shows up: how much of a transformer's intermediate representation can be predicted from the current token alone, and how much appears to depend on the prior context?
 
-The central experiment is a token-only reconstruction test. For each observed
-token position in a dataset, I collect the model's input embedding and selected
-hidden states. I then fit a simple affine probe from the token embedding to each
-layer's hidden state. If the probe predicts a layer well, then that layer's
-representation is largely recoverable from token identity alone under this probe.
-If prediction quality is poor, the missing information is evidence that the layer
-has become more context dependent. The goal is not to prove exactly what the model
-uses internally, but to measure how much of the observed representation remains
-linearly predictable from a context-free input.
+The central experiment is a token-only reconstruction test. For each observed token position in the dataset, I collect the model's input embedding and selected hidden states. I then fit a simple affine probe from the token embedding to each layer's hidden state. If the probe predicts a layer well, then that layer's representation is largely recoverable from token identity alone under this probe. If the prediction quality is poor, missing information suggests that the layer has additional information that cannot be recovered from the token alone and thus that it has become more context dependent. This does not prove exactly what the model is doing internally, but it gives a useful way to measure how much of the observed representation remains linearly predictable from a context-free input.
 
-This framing gives a quantitative way to compare layers. Early transformer layers
-may remain close to lexical or local-token information, while later layers are
-expected to mix in more contextual structure. A layerwise curve of mean squared
-error, cosine similarity, and $R^2$ can therefore show whether token-only
-predictability decays gradually, drops sharply at a particular depth, or remains
-surprisingly high throughout the network.
+This framing gives a quantitative way to compare layers. Early transformer layers may remain close to lexical or local-token information, while later layers are expected to mix in more contextual structure. A layerwise curve of mean squared error, cosine similarity, and $R^2$ can therefore show whether token-only predictability decays gradually, drops sharply at a specific depth, or remains unexpectedly high throughout the network.
 
-The project also leaves room for a feature-level extension using sparse
-autoencoders. Hidden-state vectors are useful for measuring overall
-predictability, but they are hard to interpret directly. Sparse autoencoder
-features may make it possible to ask a more specific version of the same
-question: which learned features are token-local, and which features require
-context? The current implementation focuses first on the hidden-state baseline,
-with the sparse-feature analysis planned as a second stage once the baseline
-pipeline is stable.
+The project leaves room for a feature-level extension using sparse autoencoders. Hidden-state vectors are useful for measuring overall predictability, but they are hard to interpret directly. Sparse autoencoder features may make it possible to ask a more specific version of the same question: which learned features are token-local, and which features require context? The current implementation focuses first on the hidden-state baseline, with the sparse-feature analysis planned as a second stage once the baseline pipeline is stable.
 
 \section{Literature Review}
 
-This project builds on work in transformer interpretability, probing, and sparse
-feature decomposition. The common thread across these areas is the attempt to
-understand what information is present inside a model's intermediate
-representations, and how that information changes across layers.
+This project builds on work in transformer interpretability, probing, and sparse feature decomposition. The common thread across these areas is the attempt to understand what information is present inside a model's intermediate representations, and how that information changes across layers.
 
-The transformer architecture introduced by Vaswani et al. \cite{vaswani2017attention}
-is the starting point for this question. Self-attention allows each token position
-to combine information from other positions, so the representation at a position
-is not limited to the token's own embedding. In causal language models, this
-mixing is constrained to the current and previous tokens, making the distinction
-between token-local information and prior-context information especially natural.
-The experiment in this report uses that distinction directly: the probe receives
-only the current token embedding, while the target hidden state was produced by a
-model that had access to the earlier context.
+The transformer architecture introduced by Vaswani et al. \cite{vaswani2017attention} is the starting point for this question. Self-attention allows each token position to combine information from other positions, so the representation at a position is not limited to the token's own embedding. In causal language models, this mixing is constrained to the current and previous tokens, making the distinction between token-local information and prior-context information especially natural. The experiment in this report uses that distinction directly: the probe receives only the current token embedding, while the target hidden state was produced by a model that had access to the earlier context.
 
-Mechanistic interpretability work on transformer circuits motivates looking for
-structured computations inside transformer layers rather than treating hidden
-states as opaque vectors. Elhage et al. \cite{elhage2021framework} describe
-transformers in terms of residual streams, attention heads, and feed-forward
-components that can be analyzed as interacting computational units. That
-perspective supports the idea that layerwise representations may contain a mix of
-simple token-level components and more contextual computations. Olsson et al.
-\cite{olsson2022induction} study induction heads and in-context learning, showing
-how specific attention patterns can support behavior that depends on earlier
-tokens. This motivates the expectation that later representations should often
-become harder to recover from token identity alone.
+Mechanistic interpretability work on transformer circuits motivates looking for structured computations inside transformer layers rather than treating hidden states as opaque vectors. Elhage et al. \cite{elhage2021framework} describe transformers in terms of residual streams, attention heads, and feed-forward components that can be analyzed as interacting computational units. That perspective supports the idea that layerwise representations may contain a mix of simple token-level components and more contextual computations. Olsson et al. \cite{olsson2022induction} study induction heads and in-context learning, showing how specific attention patterns can support behavior that depends on earlier tokens. This motivates the expectation that later representations should often become harder to recover from token identity alone.
 
-The project is also related to work that asks what predictions are available from
-intermediate model states. The tuned lens of Belrose et al.
-\cite{belrose2023tunedlens} learns transformations from intermediate residual
-streams to the model's output distribution, revealing how model predictions
-develop across depth. My experiment uses a different direction of prediction.
-Instead of asking what output distribution is already present in a hidden state, I
-ask how much of the hidden state can be reconstructed from the context-free token
-embedding. Both approaches use learned linear maps to make layerwise information
-measurable, but they emphasize different relationships: hidden state to output in
-the tuned lens, and token embedding to hidden state here.
+The project is also related to work that asks what predictions are available from intermediate model states. The tuned lens of Belrose et al. \cite{belrose2023tunedlens} learns transformations from intermediate residual streams to the model's output distribution, revealing how model predictions develop across depth. My experiment uses a different direction of prediction. Instead of asking what output distribution is already present in a hidden state, I ask how much of the hidden state can be reconstructed from the context-free token embedding. Both approaches use learned linear maps to make layerwise information measurable, but they emphasize different relationships: hidden state to output in the tuned lens, and token embedding to hidden state here.
 
-Linear probing provides the methodological basis for this measurement. Alain and
-Bengio \cite{alain2016understanding} use linear classifier probes to study
-information available in intermediate layers, and Hewitt and Manning
-\cite{hewitt2019structural} show that linear probes can recover syntactic
-structure from word representations. These works support probing as a practical
-tool for studying representations, but they also point to an important
-limitation: probe performance measures what is recoverable by the probe, not
-necessarily what the model itself uses. In this project, high token-only probe
-performance means that the hidden state is linearly predictable from the token
-embedding. Low performance is consistent with context dependence, but it could
-also reflect a nonlinear relationship or limitations of the affine probe. For
-that reason, results should be interpreted as evidence about linear recoverability
-rather than a complete causal explanation.
+Linear probing provides the methodological basis for this measurement. Alain and Bengio \cite{alain2016understanding} use linear classifier probes to study information available in intermediate layers, and Hewitt and Manning \cite{hewitt2019structural} show that linear probes can recover syntactic structure from word representations. These works support probing as a practical tool for studying representations, but they also point to an important limitation: probe performance measures what is recoverable by the probe, not necessarily what the model itself uses. In this project, high token-only probe performance means that the hidden state is linearly predictable from the token embedding. Low performance is consistent with context dependence, but it could also reflect a nonlinear relationship or limitations of the affine probe. For that reason, results should be interpreted as evidence about linear recoverability rather than a complete causal explanation.
 
-Sparse autoencoder work provides the motivation for the planned feature-level
-extension. Bricken et al. \cite{bricken2023monosemanticity} use dictionary
-learning to decompose language model activations into sparse features that can be
-more interpretable than raw activation dimensions. If suitable sparse
-autoencoders are available for the chosen model, the same token-only
-predictability test can be applied to feature activations. This would shift the
-analysis from asking whether an entire hidden-state vector is token-local to
-asking which individual features are token-local. That extension would help
-connect quantitative predictability curves to more interpretable claims about the
-types of information represented by the model.
+Sparse autoencoder work provides the motivation for the planned feature-level extension. Bricken et al. \cite{bricken2023monosemanticity} use dictionary learning to decompose language model activations into sparse features that can be more interpretable than raw activation dimensions. If suitable sparse autoencoders are available for the chosen model, the same token-only predictability test can be applied to feature activations. This would shift the analysis from asking whether an entire hidden-state vector is token-local to asking which individual features are token-local. That extension would help connect quantitative predictability curves to more interpretable claims about the types of information represented by the model.
 
-Together, these lines of work motivate the project's baseline experiment. Prior
-work shows that transformer layers develop meaningful intermediate states, that
-linear probes can expose recoverable information in those states, and that sparse
-methods may decompose activations into interpretable features. This project uses
-those ideas to isolate a specific question: how much of a representation can be
-explained by the current token before any context is used?
+Together, these lines of work motivate the project's baseline experiment. Prior work shows that transformer layers develop meaningful intermediate states, that linear probes can expose recoverable information in those states, and that sparse methods may decompose activations into interpretable features. This project uses those ideas to isolate a specific question: how much of a representation can be explained by the current token before any context is used?
 
 
 \section{Methodology}
@@ -210,5 +126,80 @@ larger Pile-10k run once that extraction has completed.
 
 
 \printbibliography
+\bibliographystyle{plainnat}
+\bibliography{final_report/sources}
+
+\appendix
+\section{Reproducibility Details}
+
+The main experiments use the following configuration files:
+\begin{itemize}
+    \item Pythia-70M: configs/pythia70m.yaml
+    \item Pythia-160M: configs/pythia160m.yaml
+\end{itemize}
+Both use an 80/20 train/test split with random seed 0 and no ridge regularization. The generated metrics are stored in results/generated/, and the figures used in this report are stored under the final report figures directory.
+
+\section{Additional Diagnostic Figures}
+\label{app:diagnostic-figures}
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{pythia_pile10k_diagnostics/baseline_comparison.png}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{pythia_pile10k_diagnostics/cosine_boxplot.png}
+    \end{minipage}
+    \caption{Additional Pythia-70M diagnostics. Left: held-out probe MSE compared with a constant mean-hidden-state baseline. Right: distribution of per-token cosine similarities by layer.}
+    \label{fig:pythia-70m-diagnostics-a}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{pythia_pile10k_diagnostics/mse_by_position.png}
+    \vspace{0.5em}
+    \includegraphics[width=0.95\textwidth]{pythia_pile10k_diagnostics/token_layer_heatmap.png}
+    \caption{Pythia-70M token-level diagnostics. Top: reconstruction error by sequence position. Bottom: token-by-layer error heatmap for sampled held-out tokens.}
+    \label{fig:pythia-70m-diagnostics-b}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.8\textwidth]{pythia_pile10k_diagnostics/norm_vs_error.png}
+    \caption{Pythia-70M relationship between hidden-state norm and token-only reconstruction error.}
+    \label{fig:pythia-70m-norm-error}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{pythia_160m_pile10k_50k_diagnostics/baseline_comparison.png}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{pythia_160m_pile10k_50k_diagnostics/cosine_boxplot.png}
+    \end{minipage}
+    \caption{Additional Pythia-160M diagnostics. Left: held-out probe MSE compared with a constant mean-hidden-state baseline. Right: distribution of per-token cosine similarities by layer.}
+    \label{fig:pythia-160m-diagnostics-a}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.95\textwidth]{pythia_160m_pile10k_50k_diagnostics/mse_by_position.png}
+    \vspace{0.5em}
+    \includegraphics[width=0.95\textwidth]{pythia_160m_pile10k_50k_diagnostics/token_layer_heatmap.png}
+    \caption{Pythia-160M token-level diagnostics. Top: reconstruction error by sequence position. Bottom: token-by-layer error heatmap for sampled held-out tokens.}
+    \label{fig:pythia-160m-diagnostics-b}
+\end{figure}
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.8\textwidth]{pythia_160m_pile10k_50k_diagnostics/norm_vs_error.png}
+    \caption{Pythia-160M relationship between hidden-state norm and token-only reconstruction error. The final-layer norm increase explains why cosine similarity can be high even when MSE remains large.}
+    \label{fig:pythia-160m-norm-error}
+\end{figure}
 
 \end{document}
